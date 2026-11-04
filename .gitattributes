@@ -1,0 +1,16 @@
+# Normalisation des fins de ligne (LF dans le dépôt)
+* text=auto
+
+# Fichiers Windows : CRLF à l'extraction
+*.sln    text eol=crlf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Assets Unreal et médias : binaires, jamais de diff ni de conversion
+*.uasset binary
+*.umap   binary
+*.png    binary
+*.jpg    binary
+*.tga    binary
+*.wav    binary
+*.fbx    binary
