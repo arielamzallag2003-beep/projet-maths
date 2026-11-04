@@ -1,0 +1,10 @@
+# Configuration gitleaks du projet (lue automatiquement par `gitleaks dir .`).
+# On garde toutes les règles par défaut et on ajoute une exception ciblée.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Token Android File Server généré par Unreal (dev USB uniquement, non embarqué en Shipping)"
+regexTarget = "line"
+regexes = ['''^SecurityToken=[0-9A-F]{32}$''']
