@@ -1,0 +1,39 @@
+# --- Unreal Engine : fichiers générés ---
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# --- Fichiers projet générés (régénérables via "Generate Project Files") ---
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+.vs/
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Compilation C++ ---
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+
+# --- Packaging / divers ---
+*.pak
+*.ipa
+*.apk
+.DS_Store
+Thumbs.db
