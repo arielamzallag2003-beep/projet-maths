@@ -45,4 +45,4 @@ Les dossiers `Variant_Strategy/` et `Variant_TwinStick/` viennent du template To
 - Ne jamais pousser directement sur `main` : une branche par sujet, puis une pull request.
 - Messages de commit en français au format [Conventional Commits](https://www.conventionalcommits.org/fr/) : `feat: …`, `fix: …`, `docs: …`, `ci: …`, `chore: …`.
 - Les PR sont fusionnées en **squash and merge** ; le titre de la PR devient le message du commit sur `main`, il doit donc respecter le même format.
-- La CI (build, CodeQL, scan de secrets gitleaks) doit passer avant la fusion.
+- La CI (hygiène du dépôt, scan de secrets gitleaks, revue des dépendances) doit passer avant la fusion. Elle ne compile pas le projet Unreal : vérifier que ça compile en local avant d'ouvrir la PR.
