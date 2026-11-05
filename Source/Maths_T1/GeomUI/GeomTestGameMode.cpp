@@ -12,6 +12,7 @@
 #include "Misc/Paths.h"
 #include "SWebBrowser.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SDPIScaler.h"
 #include "Widgets/SOverlay.h"
 
 AGeomTestGameMode::AGeomTestGameMode()
@@ -107,7 +108,10 @@ void AGeomTestGameMode::CreatePanel()
 		.SupportsTransparency(false)
 		.BrowserFrameRate(BrowserFrameRate);
 
-	// Seul le rectangle du panneau capte la souris : le reste du viewport reste au jeu
+	// Seul le rectangle du panneau capte la souris : le reste du viewport reste au jeu.
+	// SDPIScaler annule l'échelle DPI de Slate pour le navigateur : sinon CEF met la page en page
+	// à la taille non mise à l'échelle et le bord droit est rogné quand la fenêtre est petite.
+	// L'échelle est transmise à la page à la place (--ui-scale), voir UpdatePanelScale.
 	SAssignNew(Root, SOverlay)
 		.Visibility(EVisibility::SelfHitTestInvisible)
 		+ SOverlay::Slot()
@@ -115,21 +119,40 @@ void AGeomTestGameMode::CreatePanel()
 		.VAlign(VAlign_Fill)
 		.Padding(PanelMargin)
 		[
-			SAssignNew(PanelBox, SBox)
-			.WidthOverride(PanelWidth)
+			SAssignNew(Scaler, SDPIScaler)
+			.DPIScale(1.f)
 			[
-				Browser.ToSharedRef()
+				SAssignNew(PanelBox, SBox)
+				.WidthOverride(PanelWidth)
+				[
+					Browser.ToSharedRef()
+				]
 			]
 		];
 
 	Viewport->AddViewportWidgetContent(Root.ToSharedRef(), 10);
 }
 
+void AGeomTestGameMode::UpdatePanelScale()
+{
+	const float ViewportScale = UWidgetLayoutLibrary::GetViewportScale(this);
+	if (ViewportScale <= 0.f || FMath::IsNearlyEqual(ViewportScale, AppliedViewportScale)) return;
+	AppliedViewportScale = ViewportScale;
+
+	// Dans le SDPIScaler, 1 unité = 1 pixel. La taille du panneau suit l'échelle du jeu,
+	// bornée pour rester lisible dans une petite fenêtre de PIE.
+	PanelScale = FMath::Clamp(ViewportScale, MinPanelScale, 2.f);
+	if (Scaler.IsValid()) Scaler->SetDPIScale(1.f / ViewportScale);
+	if (PanelBox.IsValid()) PanelBox->SetWidthOverride(PanelWidth * PanelScale);
+	if (Bridge) Bridge->SetUiScale(PanelScale);
+	UE_LOG(LogMaths_T1, Log, TEXT("Échelle du viewport %.2f : panneau à %.0f px (ui-scale %.2f)."), ViewportScale, PanelWidth * PanelScale, PanelScale);
+}
+
 float AGeomTestGameMode::GetPanelWidthPx() const
 {
 	if (!bPanelVisible) return 0.f;
-	const float Scale = UWidgetLayoutLibrary::GetViewportScale(this);
-	return (PanelWidth + 2.f * PanelMargin) * Scale;
+	const float ViewportScale = UWidgetLayoutLibrary::GetViewportScale(this);
+	return PanelWidth * PanelScale + 2.f * PanelMargin * ViewportScale;
 }
 
 void AGeomTestGameMode::TogglePanel()
@@ -146,6 +169,7 @@ void AGeomTestGameMode::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	TryWireController();
+	UpdatePanelScale();
 	if (AGeomTestPlayerController* PC = WiredController.Get())
 	{
 		PC->PanelWidthPx = GetPanelWidthPx();
@@ -199,6 +223,7 @@ void AGeomTestGameMode::EndPlay(const EEndPlayReason::Type Reason)
 	}
 	Browser.Reset();
 	PanelBox.Reset();
+	Scaler.Reset();
 	Root.Reset();
 	Super::EndPlay(Reason);
 }

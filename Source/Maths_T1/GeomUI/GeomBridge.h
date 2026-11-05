@@ -37,6 +37,9 @@ public:
 
 	bool IsReady() const { return bReady; }
 
+	/** Échelle de l'interface transmise à la page (variable CSS --ui-scale). */
+	void SetUiScale(float Scale);
+
 	// ---- Appelées par la page (JavaScript) ----
 
 	/** La page est chargée : on lui envoie l'état complet. */
@@ -91,6 +94,7 @@ private:
 	FString Algorithm = TEXT("jarvis");
 	FString Tool = TEXT("add");
 	bool bKernel = false;
+	float UiScale = 1.f;
 
 	void MarkPointsDirty_Internal() { bPointsDirty = true; }
 	void MarkResultDirty_Internal() { bResultDirty = true; }

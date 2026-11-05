@@ -463,7 +463,11 @@ void AGeomVisualizer::Tick(float DeltaSeconds)
 	{
 		const FVector P(Points[i].X, Points[i].Y, GeomDepth::Points);
 		const bool bOnHull = Hull.ContainsByPredicate([&](const FVector& H) { return FVector::DistSquared2D(H, Points[i]) < 1.0; });
-		DrawDebugPoint(World, P, bOnHull ? 9.f : 7.f, bOnHull ? GeomColors::Hull : GeomColors::Point, false, -1.f, SDPG_Foreground);
+		// DrawDebugPoint ne s'affiche pas en vue orthographique : on dessine un petit carré,
+		// c'est-à-dire un segment court dont l'épaisseur vaut sa longueur.
+		const double Half = (bOnHull ? 4.5 : 3.5) * PixelSize;
+		DrawDebugLine(World, P - FVector(Half, 0.0, 0.0), P + FVector(Half, 0.0, 0.0), bOnHull ? GeomColors::Hull : GeomColors::Point,
+			false, -1.f, SDPG_Foreground, static_cast<float>(2.0 * Half));
 		if (bLabels)
 		{
 			DrawDebugString(World, P + FVector(8.0 * PixelSize, 8.0 * PixelSize, 0.0), FString::Printf(TEXT("P%d"), PointIds[i]), nullptr, GeomColors::Label, 0.f, false, 0.9f);

@@ -59,6 +59,15 @@ void UGeomBridge::PushState()
 		*Algorithm, *Tool, bKernel ? TEXT("true") : TEXT("false")));
 }
 
+void UGeomBridge::SetUiScale(float Scale)
+{
+	UiScale = Scale;
+	if (bReady)
+	{
+		Exec(FString::Printf(TEXT("document.documentElement.style.setProperty('--ui-scale','%.3f')"), UiScale));
+	}
+}
+
 void UGeomBridge::PushShortcut(const FString& Name)
 {
 	if (Name.StartsWith(TEXT("tool:"))) Tool = Name.Mid(5);
@@ -72,6 +81,7 @@ void UGeomBridge::Ready()
 	bReady = true;
 	UE_LOG(LogMaths_T1, Log, TEXT("Panneau web prêt."));
 	PushState();
+	SetUiScale(UiScale);
 	bPointsDirty = bResultDirty = true;
 	SinceLastPush = 1.f; // envoi immédiat au prochain Flush
 }

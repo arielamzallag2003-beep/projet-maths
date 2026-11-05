@@ -8,6 +8,7 @@ class AGeomVisualizer;
 class UGeomBridge;
 class SWebBrowser;
 class SBox;
+class SDPIScaler;
 class SWidget;
 
 /**
@@ -39,6 +40,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Geometry UI")
 	float PanelMargin = 12.f;
 
+	/** Échelle minimale du panneau quand la fenêtre de jeu est petite (lisibilité). */
+	UPROPERTY(EditAnywhere, Category = "Geometry UI")
+	float MinPanelScale = 0.85f;
+
 	/** Chemin de la page, relatif à Content/. */
 	UPROPERTY(EditAnywhere, Category = "Geometry UI")
 	FString PagePath = TEXT("UI/Web/index.html");
@@ -56,6 +61,9 @@ private:
 
 	TSharedPtr<SWebBrowser> Browser;
 	TSharedPtr<SBox> PanelBox;
+	TSharedPtr<SDPIScaler> Scaler;
+	float AppliedViewportScale = -1.f;
+	float PanelScale = 1.f;
 	TSharedPtr<SWidget> Root;
 	bool bPanelVisible = true;
 	bool bFramedOnce = false;
@@ -67,6 +75,8 @@ private:
 
 	void CreatePanel();
 	void LoadPage();
+	/** Suit l'échelle DPI du viewport (redimensionnement de la fenêtre). */
+	void UpdatePanelScale();
 	/** Branche le contrôleur (il peut arriver après BeginPlay). */
 	bool TryWireController();
 	float GetPanelWidthPx() const;
