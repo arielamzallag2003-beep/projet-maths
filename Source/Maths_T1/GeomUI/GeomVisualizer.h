@@ -47,6 +47,8 @@ public:
 	int32 FindNearest(const FVector2D& P, double MaxDistance) const;
 	FBox2D GetBounds() const;
 	int32 NumPoints() const { return Points.Num(); }
+	/** Durée du dernier appel d'algorithme, en ms. */
+	double GetLastMs() const { return LastMs; }
 
 	// --- Réglages venant du panneau ---
 	void SetAlgorithm(EGeomAlgorithm InAlgorithm);
@@ -93,6 +95,8 @@ private:
 	int32 InvalidEdges = 0;
 	double LastMs = 0.0;
 	FString LastCall;
+	int32 ResultSeq = 0;
+	bool bPendingMove = false;
 
 	void ClearResults();
 	void ExtractTriangulation();

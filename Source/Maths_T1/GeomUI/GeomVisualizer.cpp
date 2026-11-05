@@ -61,6 +61,7 @@ int32 AGeomVisualizer::AddPoint(const FVector2D& P)
 		UDelaunayTriangulation::DelaunayKernel_AddPoint(FVector(P.X, P.Y, 0.0), Vertices, Edges, Faces);
 		LastMs = (FPlatformTime::Seconds() - T0) * 1000.0;
 		LastCall = TEXT("DelaunayKernel_AddPoint");
+		++ResultSeq;
 		ExtractTriangulation();
 		NotifyPoints();
 		OnResultChanged.Broadcast();
@@ -93,6 +94,7 @@ void AGeomVisualizer::RemovePoint(int32 Id)
 			UDelaunayTriangulation::DelaunayKernel_RemovePoint(VertexId, Vertices, Edges, Faces);
 			LastMs = (FPlatformTime::Seconds() - T0) * 1000.0;
 			LastCall = TEXT("DelaunayKernel_RemovePoint");
+			++ResultSeq;
 			ExtractTriangulation();
 			NotifyPoints();
 			OnResultChanged.Broadcast();
@@ -112,11 +114,17 @@ void AGeomVisualizer::MovePoint(int32 Id, const FVector2D& P, bool bRecompute)
 	{
 		return;
 	}
+	const bool bMoved = !FVector2D(Points[Index]).Equals(P, 0.01);
 	Points[Index] = FVector(P.X, P.Y, 0.0);
-	if (bRecompute)
+	if (bRecompute && (bMoved || bPendingMove))
 	{
+		bPendingMove = false;
 		NotifyPoints();
 		Recompute();
+	}
+	else if (bMoved)
+	{
+		bPendingMove = true; // déplacé sans recalcul : il faudra recalculer au prochain appel
 	}
 }
 
@@ -230,6 +238,7 @@ void AGeomVisualizer::Recompute()
 	if (Points.Num() < 3)
 	{
 		LastCall = TEXT("");
+		++ResultSeq;
 		OnResultChanged.Broadcast();
 		return;
 	}
@@ -261,6 +270,7 @@ void AGeomVisualizer::Recompute()
 		break;
 	}
 	LastMs = (FPlatformTime::Seconds() - T0) * 1000.0;
+	++ResultSeq;
 
 	if (bHasTriangulation)
 	{
@@ -337,12 +347,34 @@ void AGeomVisualizer::NotifyPoints()
 
 // ---------------------------------------------------------------- JSON pour la page
 
+namespace
+{
+	// Nombre JSON sûr : un NaN ou un infini renvoyé par un algorithme casserait le JSON côté page.
+	FString JsonNum(double V, int32& NonFinite)
+	{
+		if (!FMath::IsFinite(V))
+		{
+			++NonFinite;
+			return TEXT("0");
+		}
+		return FString::Printf(TEXT("%.2f"), V);
+	}
+
+	// Les noms d'appel sont fixes, mais on échappe quand même pour ne jamais produire un JSON invalide
+	FString JsonString(const FString& In)
+	{
+		return In.Replace(TEXT("\\"), TEXT("\\\\")).Replace(TEXT("\""), TEXT("\\\""));
+	}
+}
+
 FString AGeomVisualizer::PointsToJson() const
 {
+	int32 Ignored = 0;
 	FString Out = TEXT("{\"points\":[");
 	for (int32 i = 0; i < Points.Num(); ++i)
 	{
-		Out += FString::Printf(TEXT("%s{\"id\":%d,\"x\":%.2f,\"y\":%.2f}"), i ? TEXT(",") : TEXT(""), PointIds[i], Points[i].X, Points[i].Y);
+		Out += FString::Printf(TEXT("%s{\"id\":%d,\"x\":%s,\"y\":%s}"), i ? TEXT(",") : TEXT(""), PointIds[i],
+			*JsonNum(Points[i].X, Ignored), *JsonNum(Points[i].Y, Ignored));
 	}
 	Out += TEXT("]}");
 	return Out;
@@ -352,31 +384,38 @@ FString AGeomVisualizer::ResultToJson() const
 {
 	const bool bTri = Algorithm == EGeomAlgorithm::Incremental || Algorithm == EGeomAlgorithm::Delaunay;
 	static const TCHAR* Names[] = { TEXT("jarvis"), TEXT("graham"), TEXT("incr"), TEXT("delaunay") };
+	int32 NonFinite = 0;
 
-	FString Out = FString::Printf(TEXT("{\"algo\":\"%s\",\"call\":\"%s\",\"ms\":%.4f,\"n\":%d,\"kind\":\"%s\",\"kernel\":%s"),
-		Names[(int32)Algorithm], *LastCall, LastMs, Points.Num(), bTri ? TEXT("tri") : TEXT("hull"),
-		bKernelMode ? TEXT("true") : TEXT("false"));
-
-	Out += TEXT(",\"hull\":[");
+	FString Body = TEXT("\"hull\":[");
 	for (int32 i = 0; i < Hull.Num(); ++i)
 	{
-		Out += FString::Printf(TEXT("%s[%.2f,%.2f]"), i ? TEXT(",") : TEXT(""), Hull[i].X, Hull[i].Y);
+		Body += FString::Printf(TEXT("%s[%s,%s]"), i ? TEXT(",") : TEXT(""), *JsonNum(Hull[i].X, NonFinite), *JsonNum(Hull[i].Y, NonFinite));
 	}
-	Out += TEXT("],\"tris\":[");
+	Body += TEXT("],\"tris\":[");
 	for (int32 i = 0; i < ResultTriangles.Num(); ++i)
 	{
 		const TArray<FVector>& T = ResultTriangles[i];
-		Out += FString::Printf(TEXT("%s[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]"), i ? TEXT(",") : TEXT(""), T[0].X, T[0].Y, T[1].X, T[1].Y, T[2].X, T[2].Y);
+		Body += FString::Printf(TEXT("%s[%s,%s,%s,%s,%s,%s]"), i ? TEXT(",") : TEXT(""),
+			*JsonNum(T[0].X, NonFinite), *JsonNum(T[0].Y, NonFinite), *JsonNum(T[1].X, NonFinite),
+			*JsonNum(T[1].Y, NonFinite), *JsonNum(T[2].X, NonFinite), *JsonNum(T[2].Y, NonFinite));
 	}
-	Out += TEXT("],\"edges\":[");
+	Body += TEXT("],\"edges\":[");
 	for (int32 i = 0; i < ResultEdges.Num(); ++i)
 	{
 		const TPair<FVector, FVector>& E = ResultEdges[i];
-		Out += FString::Printf(TEXT("%s[%.2f,%.2f,%.2f,%.2f]"), i ? TEXT(",") : TEXT(""), E.Key.X, E.Key.Y, E.Value.X, E.Value.Y);
+		Body += FString::Printf(TEXT("%s[%s,%s,%s,%s]"), i ? TEXT(",") : TEXT(""),
+			*JsonNum(E.Key.X, NonFinite), *JsonNum(E.Key.Y, NonFinite), *JsonNum(E.Value.X, NonFinite), *JsonNum(E.Value.Y, NonFinite));
 	}
-	Out += FString::Printf(TEXT("],\"counts\":{\"vertices\":%d,\"edges\":%d,\"faces\":%d,\"invalidFaces\":%d,\"invalidEdges\":%d}}"),
-		Vertices.Num(), Edges.Num(), Faces.Num(), InvalidFaces, InvalidEdges);
-	return Out;
+	Body += TEXT("]");
+
+	// seq : numéro du calcul ; firstId : identifiant du premier point (la page s'en sert pour
+	// reconnaître la réponse à une requête précise, par exemple pendant la batterie de tests)
+	return FString::Printf(
+		TEXT("{\"algo\":\"%s\",\"call\":\"%s\",\"ms\":%.4f,\"n\":%d,\"seq\":%d,\"firstId\":%d,\"kind\":\"%s\",\"kernel\":%s,%s,")
+		TEXT("\"counts\":{\"vertices\":%d,\"edges\":%d,\"faces\":%d,\"invalidFaces\":%d,\"invalidEdges\":%d,\"nonFinite\":%d}}"),
+		Names[(int32)Algorithm], *JsonString(LastCall), FMath::IsFinite(LastMs) ? LastMs : 0.0, Points.Num(), ResultSeq,
+		PointIds.Num() ? PointIds[0] : 0, bTri ? TEXT("tri") : TEXT("hull"), bKernelMode ? TEXT("true") : TEXT("false"), *Body,
+		Vertices.Num(), Edges.Num(), Faces.Num(), InvalidFaces, InvalidEdges, NonFinite);
 }
 
 // ---------------------------------------------------------------- Dessin (DrawDebug, hors Shipping)

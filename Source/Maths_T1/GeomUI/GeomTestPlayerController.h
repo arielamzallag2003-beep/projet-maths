@@ -56,6 +56,7 @@ private:
 	FVector2D PanStartMouse = FVector2D::ZeroVector;
 	FVector2D PanStartCenter = FVector2D::ZeroVector;
 	FVector2D LastCursor = FVector2D::ZeroVector;
+	float SinceDragRecompute = 0.f;
 
 	AGeomTestPawn* GetGeomPawn() const;
 	bool GetMouseOnPlane(FVector2D& Out) const;

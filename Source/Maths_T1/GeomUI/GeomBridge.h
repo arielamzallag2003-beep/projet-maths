@@ -73,6 +73,13 @@ public:
 	UFUNCTION()
 	void FrameAll();
 
+	/** Masque ou affiche le panneau (comme la touche H dans le niveau). */
+	UFUNCTION()
+	void TogglePanel();
+
+	/** Branché par le GameMode, qui possède le panneau. */
+	TFunction<void()> OnTogglePanel;
+
 	UFUNCTION()
 	void Recompute();
 
@@ -95,6 +102,7 @@ private:
 	FString Tool = TEXT("add");
 	bool bKernel = false;
 	float UiScale = 1.f;
+	int32 LastSentHover = INDEX_NONE;
 
 	void MarkPointsDirty_Internal() { bPointsDirty = true; }
 	void MarkResultDirty_Internal() { bResultDirty = true; }

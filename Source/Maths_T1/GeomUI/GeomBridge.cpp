@@ -40,6 +40,13 @@ void UGeomBridge::Flush(float DeltaSeconds)
 		SinceLastPush = 0.f;
 	}
 
+	// Point survolé : la page affiche ses informations
+	if (V && V->HoverId != LastSentHover)
+	{
+		LastSentHover = V->HoverId;
+		Exec(FString::Printf(TEXT("window.onGeomHover&&window.onGeomHover(%d)"), LastSentHover));
+	}
+
 	AGeomTestPlayerController* C = Controller.Get();
 	if (C && SinceLastCursor >= 0.1f)
 	{
@@ -147,6 +154,11 @@ void UGeomBridge::SetOverlay(const FString& Name, const FString& Packed, const F
 void UGeomBridge::FrameAll()
 {
 	if (AGeomTestPlayerController* C = Controller.Get()) C->FrameAll();
+}
+
+void UGeomBridge::TogglePanel()
+{
+	if (OnTogglePanel) OnTogglePanel();
 }
 
 void UGeomBridge::Recompute()

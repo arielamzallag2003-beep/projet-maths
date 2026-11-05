@@ -42,6 +42,8 @@ void AGeomTestGameMode::BeginPlay()
 
 	Bridge = NewObject<UGeomBridge>(this);
 	Bridge->Init(Visualizer, nullptr, Browser);
+	TWeakObjectPtr<AGeomTestGameMode> WeakSelf(this);
+	Bridge->OnTogglePanel = [WeakSelf]() { if (WeakSelf.IsValid()) WeakSelf->TogglePanel(); };
 	LoadPage();
 	TryWireController();
 }

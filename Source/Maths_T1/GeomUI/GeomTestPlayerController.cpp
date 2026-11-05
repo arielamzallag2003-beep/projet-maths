@@ -100,7 +100,13 @@ void AGeomTestPlayerController::PlayerTick(float DeltaTime)
 
 	if (Visualizer->DragId != INDEX_NONE)
 	{
-		Visualizer->MovePoint(Visualizer->DragId, W, true);
+		// Glisser : recalcul à chaque frame si l'algorithme est rapide, sinon 10 fois par seconde
+		// pour garder le jeu fluide. Le recalcul final a lieu au relâchement.
+		SinceDragRecompute += DeltaTime;
+		const float Interval = Visualizer->GetLastMs() > 4.0 ? 0.1f : 0.f;
+		const bool bNow = SinceDragRecompute >= Interval;
+		Visualizer->MovePoint(Visualizer->DragId, W, bNow);
+		if (bNow) SinceDragRecompute = 0.f;
 		return;
 	}
 	Visualizer->HoverId = Visualizer->FindNearest(W, PickRadius());
