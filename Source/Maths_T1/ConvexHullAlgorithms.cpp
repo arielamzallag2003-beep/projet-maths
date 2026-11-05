@@ -157,6 +157,6 @@ TArray<FVector> UConvexHullAlgorithms::ComputeGrahamScan(const TArray<FVector>& 
 }
 
 
-#define GetAngle
-#define GetNorm
-#define OrientAngle2D
+#undef GetAngle
+#undef GetNorm
+#undef OrientAngle2D
