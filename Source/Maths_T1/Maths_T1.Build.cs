@@ -20,7 +20,9 @@ public class Maths_T1 : ModuleRules
 			"GameplayStateTreeModule",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore",
+			"WebBrowser" // SWebBrowser, pour le panneau de la scène de test (GeomUI)
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -32,7 +34,8 @@ public class Maths_T1 : ModuleRules
 			"Maths_T1/Variant_TwinStick",
 			"Maths_T1/Variant_TwinStick/AI",
 			"Maths_T1/Variant_TwinStick/Gameplay",
-			"Maths_T1/Variant_TwinStick/UI"
+			"Maths_T1/Variant_TwinStick/UI",
+			"Maths_T1/GeomUI"
 		});
 
 		// Uncomment if you are using Slate UI
