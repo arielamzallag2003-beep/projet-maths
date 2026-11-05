@@ -8,6 +8,11 @@ public class Maths_T1 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// Chaque .cpp est compilé séparément (pas de « unity build »). Sinon un #define posé dans un
+		// .cpp (ex. #define GetAngle ...) déborde sur les fichiers regroupés après lui, y compris les
+		// en-têtes du moteur, et casse la compilation de façon difficile à diagnostiquer.
+		bUseUnity = false;
+
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core",
 			"CoreUObject",
