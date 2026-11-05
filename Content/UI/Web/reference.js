@@ -60,22 +60,32 @@ const Geo = (() => {
     return map;
   }
 
-  // Flips de Lawson jusqu'à ce que toutes les arêtes soient conformes
+  // Flips de Lawson avec une pile d'arêtes à tester et une adjacence mise à jour à chaque flip
+  // (O(flips) au lieu de reconstruire toutes les arêtes à chaque fois)
   function delaunay(P) {
-    const tris = triangulate(P).map(t => t.slice());
-    let flips = 0, changed = true, guard = 0;
-    while (changed && guard++ < 20000) {
-      changed = false;
-      for (const pair of edgeMap(tris).values()) {
-        if (pair.length !== 2) continue;
-        const [[t1, e1], [t2, e2]] = pair, A = tris[t1], C = tris[t2];
-        const u = A[e1], v = A[(e1+1) % 3], w1 = A[(e1+2) % 3], w2 = C[(e2+2) % 3];
-        if (inCircle(A[0], A[1], A[2], w2) > 1e-6 * scaleOf(A)) {
-          tris[t1] = [w1, u, w2]; tris[t2] = [w1, w2, v];
-          for (const ti of [t1, t2]) { const t = tris[ti]; if (orient(t[0], t[1], t[2]) < 0) [t[1], t[2]] = [t[2], t[1]]; }
-          flips++; changed = true; break;
-        }
-      }
+    const ccw = (a, b, c) => (orient(a, b, c) > 0 ? [a, b, c] : [a, c, b]);
+    const tris = triangulate(P).map((t) => ccw(t[0], t[1], t[2]));
+    const map = new Map();
+    const addT = (ti) => { const t = tris[ti]; for (let e = 0; e < 3; e++) { const k = key(t[e], t[(e + 1) % 3]); (map.get(k) || map.set(k, new Set()).get(k)).add(ti); } };
+    const remT = (ti) => { const t = tris[ti]; for (let e = 0; e < 3; e++) { const set = map.get(key(t[e], t[(e + 1) % 3])); if (set) set.delete(ti); } };
+    tris.forEach((_, i) => addT(i));
+    const stack = [...map.keys()], queued = new Set(stack);
+    const push = (a, b) => { const k = key(a, b); if (!queued.has(k)) { queued.add(k); stack.push(k); } };
+    let flips = 0, guard = 0;
+    while (stack.length && guard++ < 500000) {
+      const k = stack.pop(); queued.delete(k);
+      const set = map.get(k);
+      if (!set || set.size !== 2) continue;
+      const [t1, t2] = [...set], A = tris[t1], C = tris[t2];
+      let e1 = 0; while (e1 < 3 && key(A[e1], A[(e1 + 1) % 3]) !== k) e1++;
+      if (e1 === 3) continue;
+      const u = A[e1], v = A[(e1 + 1) % 3], w1 = A[(e1 + 2) % 3], w2 = C.find((p) => p !== u && p !== v);
+      if (!w2 || inCircle(A[0], A[1], A[2], w2) <= 1e-6 * scaleOf(A)) continue;
+      remT(t1); remT(t2);
+      tris[t1] = ccw(w1, u, w2); tris[t2] = ccw(w1, w2, v);
+      addT(t1); addT(t2);
+      flips++;
+      push(w1, u); push(u, w2); push(w2, v); push(v, w1);
     }
     return { tris, flips };
   }
@@ -138,22 +148,74 @@ const Geo = (() => {
     return segs;
   }
 
-  return { orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key };
+  // Générateur pseudo-aléatoire reproductible (mulberry32) : même graine, même nuage
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+
+  // Nuages types. kind, n, seed -> [{x, y}] (sans id)
+  function cloud(kind, n, seed) {
+    const R = rng(seed), out = [];
+    const gauss = () => { let u = 0, v = 0; while (!u) u = R(); while (!v) v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const add = (x, y) => out.push({ x: Math.round(x), y: Math.round(y) });
+    switch (kind) {
+      case 'disc': for (let i = 0; i < n; i++) { const a = R() * 2 * Math.PI, r = Math.sqrt(R()) * 1300; add(Math.cos(a) * r * 1.4, Math.sin(a) * r * 0.9); } break;
+      case 'gauss': for (let i = 0; i < n; i++) add(gauss() * 620, gauss() * 420); break;
+      case 'clusters': { const C = [[-900, 400], [800, 500], [0, -600]]; for (let i = 0; i < n; i++) { const [cx, cy] = C[i % 3]; add(cx + gauss() * 230, cy + gauss() * 200); } break; }
+      case 'circle': { const o = R() * Math.PI; for (let i = 0; i < n; i++) { const a = o + (i / n) * 2 * Math.PI; add(Math.cos(a) * 1200, Math.sin(a) * 1200); } break; }
+      case 'grid': { const c = Math.max(2, Math.round(Math.sqrt(n))); for (let i = 0; i < c; i++) for (let j = 0; j < c; j++) add((i - (c - 1) / 2) * 2600 / c, (j - (c - 1) / 2) * 2000 / c); break; }
+      case 'line': { const m = Math.max(2, n - 1); for (let i = 0; i < m; i++) add(-1500 + (i * 3000) / (m - 1), -300 + (i * 600) / (m - 1)); add(200, 700); break; }
+      // Cas limites : petits, précis, ceux qui cassent les implémentations naïves
+      case 'three': add(-800, -500); add(900, -300); add(100, 800); break;
+      case 'square': add(-800, -800); add(800, -800); add(800, 800); add(-800, 800); add(0, 0); break;
+      case 'collinear': for (let i = 0; i < Math.max(3, Math.min(n, 12)); i++) add(-1200 + i * 200, -400 + i * 70); break;
+      case 'duplicates': for (let i = 0; i < Math.max(4, Math.min(n, 20)); i++) { const a = R() * 2 * Math.PI, r = Math.sqrt(R()) * 1000; add(Math.cos(a) * r, Math.sin(a) * r); } out.push({ ...out[0] }, { ...out[1] }); break;
+      case 'vertical': for (let i = 0; i < 6; i++) add(-500, -1000 + i * 400); for (let i = 0; i < 6; i++) add(500, -1000 + i * 400); add(0, 0); break;
+      case 'tiny': for (let i = 0; i < Math.max(4, Math.min(n, 30)); i++) out.push({ x: Math.round((R() * 6 - 3) * 100) / 100, y: Math.round((R() * 6 - 3) * 100) / 100 }); break;
+    }
+    return out;
+  }
+
+  // Écarts entre une sortie et la référence (pour le calque « Différences »)
+  const pk = (p) => (+p.x).toFixed(2) + ',' + (+p.y).toFixed(2);
+  function hullDiff(out, ref) {
+    const so = new Set(out.map(pk)), sr = new Set(ref.map(pk));
+    return { missing: ref.filter((p) => !so.has(pk(p))), extra: out.filter((p) => !sr.has(pk(p))) };
+  }
+  function trisDiff(out, ref) {
+    const tk = (t) => t.map(pk).sort().join(' ');
+    const so = new Set(out.map(tk)), sr = new Set(ref.map(tk));
+    return { missing: ref.filter((t) => !so.has(tk(t))), extra: out.filter((t) => !sr.has(tk(t))) };
+  }
+
+  // Positions distinctes (les doublons exacts ne comptent qu'une fois)
+  function unique(P) { const seen = new Set(); return P.filter((p) => { const k = pk(p); if (seen.has(k)) return false; seen.add(k); return true; }); }
+
+  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key };
 })();
 
 /* ---------- Vérifications d'un résultat renvoyé par le C++ ---------- */
-function runChecks(res, points) {
+function runChecks(res, rawPoints, refDelaunay) {
+  // Les doublons exacts ne comptent qu'une fois pour les formules (Euler, nombre de sommets...)
+  const points = Geo.unique(rawPoints);
   const out = [], n = points.length;
   if (!res || n < 3) return out;
   const add = (ok, label, value, hint) => out.push({ ok, label, value, hint });
-  const near = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+  const near = (a, b) => Math.abs(a.x - b.x) < 0.01 && Math.abs(a.y - b.y) < 0.01;
   const H = Geo.hull(points), b = Geo.hullWithBoundary(points).length, collinear = Geo.allCollinear(points);
+
+  const nonFinite = (res.counts && res.counts.nonFinite) || 0;
+  if (rawPoints.length !== n) add(null, 'Doublons dans l\'entrée', `${rawPoints.length - n} ignoré${rawPoints.length - n > 1 ? 's' : ''}`, 'Les tests comptent chaque position une seule fois ; la fonction doit supporter les doublons sans planter.');
+  if (nonFinite) add(false, 'Coordonnées valides (pas de NaN)', `${nonFinite} invalide${nonFinite > 1 ? 's' : ''}`, 'Une division par zéro ou un pointeur non initialisé a produit NaN ou l\'infini ; remplacé par 0 pour l\'affichage.');
 
   if (res.kind === 'hull') {
     const hull = res.hull;
     add(hull.length >= 3 || collinear, 'La fonction renvoie un polygone', `${hull.length} sommet${hull.length > 1 ? 's' : ''}`,
         hull.length === 0 ? 'Tableau vide : la fonction est sans doute encore à écrire.' : hull.length < 3 ? 'Moins de 3 sommets pour des points non alignés.' : '');
     if (hull.length >= 3) {
+      const keys = hull.map((p) => Geo.pk(p)), dup = keys.length - new Set(keys).size;
+      add(dup === 0, 'Aucun sommet en double', dup === 0 ? 'oui' : `${dup} doublon${dup > 1 ? 's' : ''}`, dup ? 'Souvent : la boucle ne s\'arrête pas en revenant au point de départ.' : '');
       const fromInput = hull.every(p => points.some(q => near(p, q)));
       add(fromInput, 'Sommets pris parmi les points d\'entrée', fromInput ? 'oui' : 'non', fromInput ? '' : 'Un sommet ne correspond à aucun point du nuage.');
       let neg = 0, zero = 0;
@@ -185,7 +247,7 @@ function runChecks(res, points) {
         const bad = Geo.nonDelaunayEdges(T);
         add(bad === 0, 'Critère de Delaunay (cercles vides)', bad === 0 ? 'respecté' : `${bad} arête${bad > 1 ? 's' : ''}`, '');
         if (!Geo.hasCocircular(T)) {
-          const ref = Geo.delaunay(points).tris, kk = t => t.map(p => p.x + ',' + p.y).sort().join(' ');
+          const ref = refDelaunay ? refDelaunay() : Geo.delaunay(points).tris, kk = t => t.map(p => p.x + ',' + p.y).sort().join(' ');
           const set = new Set(ref.map(kk)), same = T.length === ref.length && T.every(t => set.has(kk(t)));
           add(same, 'Identique à la référence JS', same ? 'oui' : 'non', '');
         } else add(null, 'Identique à la référence JS', 'n/a', 'Points cocycliques : plusieurs triangulations de Delaunay sont correctes.');

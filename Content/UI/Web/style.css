@@ -82,7 +82,7 @@ body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; borde
 
 /* Onglets */
 .tabs { display: flex; gap: .15rem; padding: .7rem 1rem 0; border-bottom: 1px solid var(--line); }
-.tabs button { padding: .5rem .7rem; border: 0; background: none; color: var(--mute); cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs button { padding: .5rem .62rem; border: 0; background: none; color: var(--mute); cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button:hover { color: var(--ink); }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .tabs .badge { font: 600 .68rem var(--font-mono); margin-left: .3rem; }
@@ -145,6 +145,42 @@ h3 { margin: .2rem 0 0; font: 600 .7rem/1 var(--font-display); letter-spacing: .
 .foot .status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .foot .status.flash { color: var(--ink); }
 .foot .cursor { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Ajouts : en-tête, graine, import/export, banc d'essai */
+.icon { width: 2rem; height: 2rem; display: grid; place-items: center; flex: none; border-radius: 6px; border: 1px solid var(--line); background: var(--raise); color: var(--mute); cursor: pointer; }
+.icon:hover { color: var(--ink); border-color: var(--line-hi); }
+.icon svg { width: .95rem; height: .95rem; }
+.tabs [aria-controls="p-help"] { margin-left: auto; font-family: var(--font-mono); }
+.btns.two { grid-template-columns: 1fr 1fr; }
+.btn.small { padding: .4rem .6rem; font-size: .8rem; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0b0f15; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { border-color: var(--ink); }
+.seed { display: flex; align-items: center; gap: .5rem; margin-top: .55rem; font-size: .8rem; color: var(--mute); }
+.seed input { width: 6.5rem; padding: .38rem .5rem; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); font: 500 .85rem var(--font-mono); color: var(--ink); }
+.seed input:focus { border-color: var(--line-hi); outline: none; }
+.seed .btn { margin-left: auto; }
+details.io { border: 1px solid var(--line); border-radius: 8px; background: var(--raise); padding: .1rem .7rem; }
+details.io[open] { padding-bottom: .7rem; }
+details.io summary { cursor: pointer; padding: .5rem 0; font-size: .86rem; color: var(--mute); }
+details.io summary:hover { color: var(--ink); }
+details.io .note { margin-bottom: .5rem; }
+textarea { width: 100%; resize: vertical; min-height: 5rem; padding: .5rem; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: .8rem/1.4 var(--font-mono); margin-bottom: .5rem; }
+textarea:focus { border-color: var(--line-hi); outline: none; }
+
+table.results { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.results th { text-align: left; font: 600 .68rem/1 var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); padding: .35rem .3rem; border-bottom: 1px solid var(--line); }
+.results td { padding: .42rem .3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.results td:nth-child(2), .results td:nth-child(3) { font-family: var(--font-mono); color: var(--mute); white-space: nowrap; }
+.results tbody tr { cursor: pointer; }
+.results tbody tr:hover td { background: var(--raise); }
+.results .ok { color: var(--good); } .results .ko { color: var(--bad); } .results .empty { color: var(--warn); } .results .wait { color: var(--dim); }
+.results small { display: block; color: var(--dim); font-size: .74rem; }
+#curve { width: 100%; height: auto; margin-top: .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.foot .status b { color: var(--ink); font-weight: 600; }
+
+.reopen { position: fixed; top: 12px; left: 12px; display: flex; align-items: center; gap: .5rem; padding: .55rem .8rem; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; font-weight: 600; }
+.reopen[hidden] { display: none; }
+.panel[hidden] { display: none; }
 
 /* ---------------- Simulation du niveau (navigateur seulement) ---------------- */
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }

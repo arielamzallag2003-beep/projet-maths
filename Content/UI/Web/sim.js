@@ -28,7 +28,7 @@
     const S = {
       points: [], nextId: 1, algo: 'jarvis', tool: 'add', kernel: false,
       layers: { hull: true, edges: true, labels: true, grid: true }, overlays: {},
-      result: null, hover: null, drag: null, pan: null,
+      result: null, hover: null, drag: null, pan: null, seq: 0,
       cam: { x: 0, y: 0 }, width: 4000, // largeur visible en cm, comme OrthoWidth
     };
     const stub = location.hash === '#vide';
@@ -36,16 +36,16 @@
 
     /* ---- « C++ » simulé ---- */
     function compute() {
-      const P = S.points, n = P.length, t0 = performance.now();
-      const res = { algo: S.algo, call: '', ms: 0, n, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0 } };
+      const P = Geo.unique(S.points), n = S.points.length, t0 = performance.now();
+      const res = { algo: S.algo, call: '', ms: 0, n, seq: ++S.seq, firstId: S.points.length ? S.points[0].id : 0, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0 } };
       res.call = { jarvis: 'ComputeJarvisMarch', graham: 'ComputeGrahamScan', incr: 'IncrementalTriangulation2D', delaunay: 'IncrementalTriangulation2D + FlipEdgesToDelaunay' }[S.algo];
-      if (n >= 3 && !stub) {
+      if (P.length >= 3 && !stub) {
         if (res.kind === 'hull') res.hull = Geo.hull(P).map((p) => [p.x, p.y]);
         else {
           const tris = S.algo === 'delaunay' ? Geo.delaunay(P).tris : Geo.triangulate(P);
           res.tris = tris.map((t) => [t[0].x, t[0].y, t[1].x, t[1].y, t[2].x, t[2].y]);
           const b = Geo.hullWithBoundary(P).length;
-          res.counts = { vertices: n, edges: tris.length ? (3 * tris.length + b) / 2 : 0, faces: tris.length, invalidFaces: 0, invalidEdges: 0 };
+          res.counts = { vertices: P.length, edges: tris.length ? (3 * tris.length + b) / 2 : 0, faces: tris.length, invalidFaces: 0, invalidEdges: 0 };
         }
       }
       res.ms = n >= 3 ? performance.now() - t0 : 0;
@@ -77,12 +77,16 @@
       },
       frameall() { setTimeout(frame, 0); },
       recompute() { compute(); },
+      togglepanel() {
+        const panel = document.getElementById('panel'), reopen = document.getElementById('reopen');
+        panel.hidden = !panel.hidden; reopen.hidden = !panel.hidden; resize();
+      },
       log(msg) { console.log('[geom]', msg); },
     };
 
     /* ---- Caméra : X à droite, Y en haut, comme la caméra de AGeomTestPawn ---- */
     let W = 0, H = 0, dpr = 1;
-    const panelPx = () => (W > 720 ? document.getElementById('panel').offsetWidth + 24 : 0);
+    const panelPx = () => { const p = document.getElementById('panel'); return W > 720 && !p.hidden ? p.offsetWidth + 24 : 0; };
     const px = () => S.width / W; // cm par pixel
     const toS = (p) => ({ x: W / 2 + (p.x - S.cam.x) / px(), y: H / 2 - (p.y - S.cam.y) / px() });
     const toW = (sx, sy) => ({ x: (sx - W / 2) * px() + S.cam.x, y: -(sy - H / 2) * px() + S.cam.y });
@@ -133,7 +137,7 @@
 
     /* ---- Souris (même comportement que AGeomTestPlayerController) ---- */
     const nearest = (sx, sy) => { let best = null, bd = 14; for (const p of S.points) { const s = toS(p), d = Math.hypot(s.x - sx, s.y - sy); if (d < bd) { bd = d; best = p; } } return best; };
-    const remove = (p) => { S.points = S.points.filter((q) => q !== p); S.hover = null; changed(); };
+    const remove = (p) => { S.points = S.points.filter((q) => q !== p); S.hover = null; later(() => window.onGeomHover(-1)); changed(); };
     cv.addEventListener('mousedown', (e) => {
       if (e.button === 1) { e.preventDefault(); S.pan = { x: e.clientX, y: e.clientY, cam: { ...S.cam } }; return; }
       if (e.button !== 0) return;
@@ -148,7 +152,7 @@
       const rect = cv.getBoundingClientRect(), sx = e.clientX - rect.left, sy = e.clientY - rect.top, w = toW(sx, sy);
       window.onGeomCursor(w.x, w.y);
       if (S.drag) { S.drag.x = Math.round(w.x); S.drag.y = Math.round(w.y); changed(); return; }
-      const h = nearest(sx, sy); if (h !== S.hover) { S.hover = h; draw(); }
+      const h = nearest(sx, sy); if (h !== S.hover) { S.hover = h; draw(); later(() => window.onGeomHover(h ? h.id : -1)); }
     });
     window.addEventListener('mouseup', () => { S.drag = null; S.pan = null; draw(); });
     cv.addEventListener('contextmenu', (e) => { e.preventDefault(); const p = nearest(e.offsetX, e.offsetY); if (p) remove(p); });
@@ -158,6 +162,7 @@
       S.width = Math.min(200000, Math.max(200, S.width * (e.deltaY < 0 ? 1 / 1.15 : 1.15)));
       const k = S.width / old; S.cam = { x: c.x - (c.x - S.cam.x) * k, y: c.y - (c.y - S.cam.y) * k }; draw();
     }, { passive: false });
+    document.getElementById('reopen').onclick = () => api.togglepanel();
     window.addEventListener('resize', resize);
     resize(); frame();
     return api;

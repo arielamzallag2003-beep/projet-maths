@@ -10,11 +10,13 @@
 <!-- Navigateur seulement : simulation du niveau. Masqué dans Unreal (body.ue). -->
 <canvas id="scene" aria-label="Simulation du niveau : cliquer pour ajouter un point"></canvas>
 <div class="sim"><span>Simulation navigateur</span><span>Lvl de test · Ortho</span></div>
+<button class="reopen" id="reopen" hidden>Géométrie <kbd>H</kbd></button>
 
 <aside class="panel" id="panel" aria-label="Panneau de géométrie">
   <div class="top">
     <div class="brand"><b>Géométrie</b><small>Maths_T1 · scène de test</small></div>
     <span class="pill" id="bridge">connexion…</span>
+    <button class="icon" id="hide" title="Masquer le panneau (H)" aria-label="Masquer le panneau"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 3 5 8l5 5"/></svg></button>
   </div>
 
   <div class="picker">
@@ -38,12 +40,14 @@
 
   <div class="tabs" role="tablist">
     <button role="tab" id="t-scene" aria-controls="p-scene" aria-selected="true">Scène</button>
-    <button role="tab" id="t-view" aria-controls="p-view" aria-selected="false">Affichage</button>
+    <button role="tab" id="t-view" aria-controls="p-view" aria-selected="false">Calques</button>
     <button role="tab" id="t-check" aria-controls="p-check" aria-selected="false">Vérifications<span class="badge" id="badge"></span></button>
-    <button role="tab" id="t-help" aria-controls="p-help" aria-selected="false">Aide</button>
+    <button role="tab" id="t-bench" aria-controls="p-bench" aria-selected="false">Banc</button>
+    <button role="tab" id="t-help" aria-controls="p-help" aria-selected="false" title="Aide et raccourcis" aria-label="Aide">?</button>
   </div>
 
   <div class="body">
+    <!-- ================= Scène ================= -->
     <section class="tabpanel" id="p-scene" role="tabpanel" aria-labelledby="t-scene">
       <div>
         <div class="label"><span>Outil dans le niveau</span></div>
@@ -53,9 +57,15 @@
           <button class="btn" data-tool="del" aria-pressed="false">Supprimer <kbd>X</kbd></button>
         </div>
       </div>
+
       <div>
-        <div class="label"><label for="count">Remplacer par un nuage</label><output id="countOut">30 points</output></div>
+        <div class="label"><label for="count">Nuage</label><output id="countOut">30 points</output></div>
         <input type="range" id="count" min="3" max="200" value="30">
+        <div class="seed">
+          <label for="seed">Graine</label>
+          <input type="number" id="seed" min="0" max="999999" value="1" inputmode="numeric">
+          <button class="btn small" id="dice" title="Nouvelle graine au hasard">Au hasard</button>
+        </div>
         <div class="chips">
           <button class="btn" data-gen="disc">Disque<small>uniforme</small></button>
           <button class="btn" data-gen="gauss">Gaussien<small>dense au centre</small></button>
@@ -64,23 +74,45 @@
           <button class="btn" data-gen="grid">Grille<small>cocycliques</small></button>
           <button class="btn" data-gen="line">Alignés<small>+ 1 point</small></button>
         </div>
+        <div class="label" style="margin-top:.7rem"><span>Cas limites</span></div>
+        <div class="chips">
+          <button class="btn" data-gen="three">3 points<small>minimum</small></button>
+          <button class="btn" data-gen="square">Carré<small>+ centre</small></button>
+          <button class="btn" data-gen="collinear">Colinéaires<small>que des alignés</small></button>
+          <button class="btn" data-gen="duplicates">Doublons<small>2 répétés</small></button>
+          <button class="btn" data-gen="vertical">Verticales<small>même abscisse</small></button>
+          <button class="btn" data-gen="tiny">Minuscule<small>6 cm de large</small></button>
+        </div>
       </div>
+
       <div class="btns">
         <button class="btn" id="undo" disabled>Annuler</button>
         <button class="btn" id="redo" disabled>Rétablir</button>
         <button class="btn" id="clear">Vider</button>
       </div>
-      <div class="btns" style="grid-template-columns: 1fr 1fr">
+      <div class="btns two">
         <button class="btn" id="frame">Cadrer <kbd>F</kbd></button>
         <button class="btn" id="rerun">Relancer l'appel</button>
       </div>
+
+      <details class="io">
+        <summary>Exporter / importer la scène</summary>
+        <p class="note">Une ligne « x y » par point, ou du JSON. Pratique pour envoyer un cas qui plante à l'équipe.</p>
+        <textarea id="sceneText" rows="5" spellcheck="false" aria-label="Points de la scène"></textarea>
+        <div class="btns two">
+          <button class="btn" id="exportBtn">Exporter</button>
+          <button class="btn" id="importBtn">Importer</button>
+        </div>
+      </details>
+
       <div class="sep"></div>
       <label class="toggle" style="--sw: var(--circle)">
         <input type="checkbox" id="kernel">
-        <span>Mode noyau de Delaunay<small>Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.</small></span>
+        <span>Mode noyau de Delaunay<small id="kernelHint">Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.</small></span>
       </label>
     </section>
 
+    <!-- ================= Calques ================= -->
     <section class="tabpanel" id="p-view" role="tabpanel" aria-labelledby="t-view" hidden>
       <h3>Dessiné par le C++</h3>
       <div>
@@ -91,12 +123,14 @@
       </div>
       <h3>Calculé par la page</h3>
       <div>
-        <label class="toggle" style="--sw: #7a8597"><i></i><span>Référence JS<small>Résultat attendu, en gris, pour comparer à l'œil.</small></span><input type="checkbox" data-overlay="reference"></label>
+        <label class="toggle" style="--sw: var(--bad)"><i></i><span>Différences avec la référence<small>Rouge : attendu mais absent. Violet : en trop.</small></span><input type="checkbox" data-overlay="diff"></label>
+        <label class="toggle" style="--sw: #7a8597"><i></i><span>Référence JS<small>Résultat attendu, en gris.</small></span><input type="checkbox" data-overlay="reference"></label>
         <label class="toggle" style="--sw: var(--circle)"><i></i><span>Cercles circonscrits<small>Des triangles renvoyés par le C++.</small></span><input type="checkbox" data-overlay="circles"></label>
         <label class="toggle" style="--sw: var(--voronoi)"><i></i><span>Diagramme de Voronoï<small>Dual de la triangulation renvoyée.</small></span><input type="checkbox" data-overlay="voronoi"></label>
       </div>
     </section>
 
+    <!-- ================= Vérifications ================= -->
     <section class="tabpanel" id="p-check" role="tabpanel" aria-labelledby="t-check" hidden>
       <div class="stats">
         <div class="stat"><b id="sN">0</b><small>points n</small></div>
@@ -110,6 +144,34 @@
       <p class="note">Chaque test porte sur la sortie réelle de la fonction C++. La référence JS sert seulement de comparaison.</p>
     </section>
 
+    <!-- ================= Banc d'essai ================= -->
+    <section class="tabpanel" id="p-bench" role="tabpanel" aria-labelledby="t-bench" hidden>
+      <div>
+        <div class="label"><span>Batterie de cas</span><output id="batterySummary"></output></div>
+        <p class="note">Lance l'algorithme choisi sur 14 nuages fixes (graines constantes) et vérifie chaque sortie. Cliquer une ligne recharge ce cas dans le niveau.</p>
+        <div class="btns two" style="margin-top:.5rem">
+          <button class="btn primary" id="runBattery">Lancer la batterie</button>
+          <button class="btn" id="runAll">Les 4 algorithmes</button>
+        </div>
+        <table class="results" id="batteryTable" hidden>
+          <thead><tr><th>Cas</th><th>n</th><th>ms</th><th>Résultat</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="sep"></div>
+      <div>
+        <div class="label"><span>Temps d'exécution selon n</span><output id="curveSummary"></output></div>
+        <p class="note">Disque uniforme, n de 10 à 200, médiane de 3 appels. Mesure le temps du C++ seul.</p>
+        <div class="btns two" style="margin-top:.5rem">
+          <button class="btn" id="runCurve">Tracer la courbe</button>
+          <button class="btn" id="stopBench" disabled>Arrêter</button>
+        </div>
+        <canvas id="curve" width="600" height="300" hidden aria-label="Courbe du temps d'exécution en fonction de n"></canvas>
+      </div>
+      <p class="note">La scène d'origine est remise en place à la fin.</p>
+    </section>
+
+    <!-- ================= Aide ================= -->
     <section class="tabpanel" id="p-help" role="tabpanel" aria-labelledby="t-help" hidden>
       <h3>Dans le niveau</h3>
       <div class="keys">
@@ -125,8 +187,9 @@
         <kbd>1 · 2 · 3 · 4</kbd><span>Jarvis · Graham · Incrémentale · Delaunay</span>
         <kbd>A · M · X</kbd><span>Ajouter · déplacer · supprimer</span>
         <kbd>Ctrl Z · Ctrl Y</kbd><span>Annuler · rétablir</span>
+        <kbd>R</kbd><span>Relancer l'appel</span>
       </div>
-      <p class="note">Les raccourcis vont à ce qui a le focus : cliquez dans le niveau pour lui rendre la main.</p>
+      <p class="note">Les raccourcis vont à ce qui a le focus : cliquez dans le niveau pour lui rendre la main. Les réglages du panneau sont mémorisés d'une session à l'autre.</p>
     </section>
   </div>
 
