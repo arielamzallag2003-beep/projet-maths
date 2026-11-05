@@ -36,7 +36,7 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 			FGeomVertex* Opp1 = nullptr;
 			FGeomVertex* Opp2 = nullptr;
 
-			for (int32 i = 0; i < 3; ++i)
+			for (int i = 0; i < 3; ++i)
 			{
 				if (Face1->Vertices[i] != V1 && Face1->Vertices[i] != V2)
 				{

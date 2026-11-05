@@ -56,8 +56,9 @@ TArray<FVector> UConvexHullAlgorithms::ComputeJarvisMarch(const TArray<FVector>&
 		{
 			if (j != i)
 			{
+				PiPj = Points[j] - Points[i];
 				float a = GetAngle(v, PiPj);
-				if (a < amin || (a == amin && GetNorm(PiPj) < lmax))
+				if (a < amin || (a == amin && GetNorm(PiPj) > lmax))
 				{
 					amin = a;
 					lmax = GetNorm(PiPj);
@@ -125,7 +126,7 @@ TArray<FVector> UConvexHullAlgorithms::ComputeGrahamScan(const TArray<FVector>& 
         // Test d'orientation du triplet (Précédent, Pivot, Suivant)
         float Orient = OrientAngle2D(Pivot->Prec->Position, Pivot->Position, Pivot->Suiv->Position);
         
-        if (Orient <= 0.0f) // Cas convexe
+        if (Orient < 0.0f) // Cas convexe
         {
             Pivot = Pivot->Suiv;
             bAvance = true;
@@ -154,3 +155,8 @@ TArray<FVector> UConvexHullAlgorithms::ComputeGrahamScan(const TArray<FVector>& 
 	
 	return ConvexHull;
 }
+
+
+#define GetAngle
+#define GetNorm
+#define OrientAngle2D

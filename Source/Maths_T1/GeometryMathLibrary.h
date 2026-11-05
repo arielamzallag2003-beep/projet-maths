@@ -49,10 +49,7 @@ public:
     // Cercles et Sphères
     UFUNCTION(BlueprintCallable, Category = "Geometry Math")
     static FVector GetCircumcenter2D(const FVector& A, const FVector& B, const FVector& C, float& OutRadiusSquared);
-
-    UFUNCTION(BlueprintCallable, Category = "Geometry Math")
-    static FVector GetSphereCircumcenter3D(const FVector& A, const FVector& B, const FVector& C, const FVector& D, float& OutRadiusSquared);
-
+    
     // Critère de Delaunay
     UFUNCTION(BlueprintCallable, Category = "Geometry Math")
     static bool IsInsideCircumcircle(const FVector& A, const FVector& B, const FVector& C, const FVector& D);
