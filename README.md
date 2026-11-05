@@ -56,12 +56,14 @@ Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseu
 
 ### Ce qu'on peut tester
 
-- Les 4 fonctions (touches `1` à `4`) sur des nuages types : disque, gaussien, amas, cercle, grille (points cocycliques), alignés.
-- Ajouter, déplacer, supprimer des points à la souris ; le résultat se recalcule à chaque modification.
-- Le **mode noyau** (Delaunay) : les ajouts et suppressions passent par `DelaunayKernel_AddPoint` / `DelaunayKernel_RemovePoint`.
-- L'onglet **Vérifications** teste la sortie réelle : polygone convexe en sens trigonométrique, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, critère de Delaunay, comparaison avec une référence JS. Une sortie vide est signalée comme « fonction encore à écrire ».
-- Calques : référence JS en gris, cercles circonscrits, Voronoï.
-
+- **Les 4 fonctions** (touches `1` à `4`) sur des nuages types (disque, gaussien, amas, cercle, grille cocyclique, alignés) et des **cas limites** (3 points, carré + centre, que des colinéaires, doublons, même abscisse, nuage de 6 cm). Chaque nuage dépend d'une **graine** : même graine, même nuage, pour rejouer exactement un cas.
+- **Souris** : ajouter, glisser, supprimer des points ; le résultat se recalcule à chaque modification (10 fois par seconde au plus si l'algorithme est lent).
+- **Mode noyau** (Delaunay) : ajouts et suppressions via `DelaunayKernel_AddPoint` / `DelaunayKernel_RemovePoint`.
+- **Vérifications** de la sortie réelle : polygone convexe en sens trigonométrique, sans doublon, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, NaN, critère de Delaunay, comparaison avec une référence JS. Une sortie vide est signalée comme « fonction encore à écrire ».
+- **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï.
+- **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou les 4 d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
+- **Exporter / importer** une scène en texte, pour partager un cas qui plante.
+- Survoler un point affiche ses informations en bas du panneau. Les réglages du panneau sont mémorisés.
 ### Fichiers
 
 | Fichier | Rôle |
@@ -75,7 +77,7 @@ Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseu
 
 ### Travailler sur la page sans Unreal
 
-Ouvrir `Content/UI/Web/index.html` dans Chrome : `sim.js` remplace le C++ et simule le niveau, avec les outils de développement habituels. `index.html#vide` simule des fonctions pas encore écrites.
+Ouvrir `Content/UI/Web/index.html` dans Chrome : `sim.js` remplace le C++ (avec la référence JS) et simule le niveau, avec les outils de développement habituels. `index.html#vide` simule des fonctions pas encore écrites. Les erreurs JavaScript de la page apparaissent dans le journal Unreal (`LogMaths_T1`, préfixe `[Web]`).
 
 ### Limites connues
 
