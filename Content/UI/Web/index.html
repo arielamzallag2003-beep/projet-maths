@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maths_T1 Panneau Géométrie</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Navigateur seulement : simulation du niveau. Masqué dans Unreal (body.ue). -->
+<canvas id="scene" aria-label="Simulation du niveau : cliquer pour ajouter un point"></canvas>
+<div class="sim"><span>Simulation navigateur</span><span>Lvl de test · Ortho</span></div>
+
+<aside class="panel" id="panel" aria-label="Panneau de géométrie">
+  <div class="top">
+    <div class="brand"><b>Géométrie</b><small>Maths_T1 · scène de test</small></div>
+    <span class="pill" id="bridge">connexion…</span>
+  </div>
+
+  <div class="picker">
+    <div class="group"><span>Enveloppe convexe</span><span>Cours 1 · 3</span></div>
+    <div class="seg" style="--c: var(--hull)">
+      <button data-algo="jarvis" aria-pressed="true"><strong>Jarvis</strong><span>ComputeJarvisMarch</span><kbd>1</kbd></button>
+      <button data-algo="graham" aria-pressed="false"><strong>Graham</strong><span>ComputeGrahamScan</span><kbd>2</kbd></button>
+    </div>
+    <div class="group"><span>Triangulation</span><span>Cours 4</span></div>
+    <div class="seg" style="--c: var(--tri)">
+      <button data-algo="incr" aria-pressed="false"><strong>Incrémentale</strong><span>Incremental…2D</span><kbd>3</kbd></button>
+      <button data-algo="delaunay" aria-pressed="false" style="--c: var(--circle)"><strong>Delaunay</strong><span>+ FlipEdges…</span><kbd>4</kbd></button>
+    </div>
+  </div>
+
+  <section class="call" aria-label="Dernier appel C++">
+    <div class="call-head"><code id="callName">–</code><span class="ms" id="callMs"></span></div>
+    <div class="call-io" id="callIo">En attente du premier résultat.</div>
+    <button class="verdict" id="verdict" data-state="none"><i class="dot"></i><span id="verdictText">Aucun résultat</span><small>Détails ›</small></button>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t-scene" aria-controls="p-scene" aria-selected="true">Scène</button>
+    <button role="tab" id="t-view" aria-controls="p-view" aria-selected="false">Affichage</button>
+    <button role="tab" id="t-check" aria-controls="p-check" aria-selected="false">Vérifications<span class="badge" id="badge"></span></button>
+    <button role="tab" id="t-help" aria-controls="p-help" aria-selected="false">Aide</button>
+  </div>
+
+  <div class="body">
+    <section class="tabpanel" id="p-scene" role="tabpanel" aria-labelledby="t-scene">
+      <div>
+        <div class="label"><span>Outil dans le niveau</span></div>
+        <div class="tools" role="group" aria-label="Outil">
+          <button class="btn" data-tool="add" aria-pressed="true">Ajouter <kbd>A</kbd></button>
+          <button class="btn" data-tool="move" aria-pressed="false">Déplacer <kbd>M</kbd></button>
+          <button class="btn" data-tool="del" aria-pressed="false">Supprimer <kbd>X</kbd></button>
+        </div>
+      </div>
+      <div>
+        <div class="label"><label for="count">Remplacer par un nuage</label><output id="countOut">30 points</output></div>
+        <input type="range" id="count" min="3" max="200" value="30">
+        <div class="chips">
+          <button class="btn" data-gen="disc">Disque<small>uniforme</small></button>
+          <button class="btn" data-gen="gauss">Gaussien<small>dense au centre</small></button>
+          <button class="btn" data-gen="clusters">Amas<small>3 groupes</small></button>
+          <button class="btn" data-gen="circle">Cercle<small>tous sur l'env.</small></button>
+          <button class="btn" data-gen="grid">Grille<small>cocycliques</small></button>
+          <button class="btn" data-gen="line">Alignés<small>+ 1 point</small></button>
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn" id="undo" disabled>Annuler</button>
+        <button class="btn" id="redo" disabled>Rétablir</button>
+        <button class="btn" id="clear">Vider</button>
+      </div>
+      <div class="btns" style="grid-template-columns: 1fr 1fr">
+        <button class="btn" id="frame">Cadrer <kbd>F</kbd></button>
+        <button class="btn" id="rerun">Relancer l'appel</button>
+      </div>
+      <div class="sep"></div>
+      <label class="toggle" style="--sw: var(--circle)">
+        <input type="checkbox" id="kernel">
+        <span>Mode noyau de Delaunay<small>Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.</small></span>
+      </label>
+    </section>
+
+    <section class="tabpanel" id="p-view" role="tabpanel" aria-labelledby="t-view" hidden>
+      <h3>Dessiné par le C++</h3>
+      <div>
+        <label class="toggle" style="--sw: var(--hull)"><i></i><span>Enveloppe convexe</span><input type="checkbox" data-layer="hull" checked></label>
+        <label class="toggle" style="--sw: var(--tri)"><i></i><span>Arêtes de la triangulation</span><input type="checkbox" data-layer="edges" checked></label>
+        <label class="toggle" style="--sw: var(--ink)"><i></i><span>Étiquettes des points<small>Masquées au-delà de 80 points.</small></span><input type="checkbox" data-layer="labels" checked></label>
+        <label class="toggle" style="--sw: var(--mute)"><i></i><span>Grille et axes</span><input type="checkbox" data-layer="grid" checked></label>
+      </div>
+      <h3>Calculé par la page</h3>
+      <div>
+        <label class="toggle" style="--sw: #7a8597"><i></i><span>Référence JS<small>Résultat attendu, en gris, pour comparer à l'œil.</small></span><input type="checkbox" data-overlay="reference"></label>
+        <label class="toggle" style="--sw: var(--circle)"><i></i><span>Cercles circonscrits<small>Des triangles renvoyés par le C++.</small></span><input type="checkbox" data-overlay="circles"></label>
+        <label class="toggle" style="--sw: var(--voronoi)"><i></i><span>Diagramme de Voronoï<small>Dual de la triangulation renvoyée.</small></span><input type="checkbox" data-overlay="voronoi"></label>
+      </div>
+    </section>
+
+    <section class="tabpanel" id="p-check" role="tabpanel" aria-labelledby="t-check" hidden>
+      <div class="stats">
+        <div class="stat"><b id="sN">0</b><small>points n</small></div>
+        <div class="stat h"><b id="sH">–</b><small>sommets env.</small></div>
+        <div class="stat"><b id="sMs">–</b><small>ms C++</small></div>
+        <div class="stat t"><b id="sF">–</b><small>faces</small></div>
+        <div class="stat t"><b id="sE">–</b><small>arêtes</small></div>
+        <div class="stat t"><b id="sV">–</b><small>sommets</small></div>
+      </div>
+      <ul class="checks" id="checks"></ul>
+      <p class="note">Chaque test porte sur la sortie réelle de la fonction C++. La référence JS sert seulement de comparaison.</p>
+    </section>
+
+    <section class="tabpanel" id="p-help" role="tabpanel" aria-labelledby="t-help" hidden>
+      <h3>Dans le niveau</h3>
+      <div class="keys">
+        <kbd>Clic</kbd><span>Ajouter un point, ou glisser un point existant</span>
+        <kbd>Clic droit</kbd><span>Supprimer le point visé</span>
+        <kbd>Molette</kbd><span>Zoom sur le curseur</span>
+        <kbd>Clic molette</kbd><span>Déplacer la vue</span>
+        <kbd>F</kbd><span>Cadrer tous les points</span>
+        <kbd>H</kbd><span>Masquer / afficher le panneau</span>
+      </div>
+      <h3>Partout</h3>
+      <div class="keys">
+        <kbd>1 · 2 · 3 · 4</kbd><span>Jarvis · Graham · Incrémentale · Delaunay</span>
+        <kbd>A · M · X</kbd><span>Ajouter · déplacer · supprimer</span>
+        <kbd>Ctrl Z · Ctrl Y</kbd><span>Annuler · rétablir</span>
+      </div>
+      <p class="note">Les raccourcis vont à ce qui a le focus : cliquez dans le niveau pour lui rendre la main.</p>
+    </section>
+  </div>
+
+  <div class="foot"><span class="status" id="status">Prêt</span><span class="cursor" id="cursor">X – · Y –</span></div>
+</aside>
+
+<script src="reference.js"></script>
+<script src="app.js"></script>
+<script src="sim.js"></script>
+</body>
+</html>
