@@ -62,7 +62,11 @@ private:
 
 	TWeakObjectPtr<class AGeomTestPlayerController> WiredController;
 
+	float SinceLoad = 0.f;
+	int32 LoadAttempts = 0;
+
 	void CreatePanel();
+	void LoadPage();
 	/** Branche le contrôleur (il peut arriver après BeginPlay). */
 	bool TryWireController();
 	float GetPanelWidthPx() const;

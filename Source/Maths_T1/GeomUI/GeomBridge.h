@@ -35,6 +35,8 @@ public:
 
 	void PushShortcut(const FString& Name);
 
+	bool IsReady() const { return bReady; }
+
 	// ---- Appelées par la page (JavaScript) ----
 
 	/** La page est chargée : on lui envoie l'état complet. */

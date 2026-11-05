@@ -9,12 +9,19 @@
 'use strict';
 
 (function () {
-  function start() {
-    if (window.ue && window.ue.geom) { GeomApp.boot(window.ue.geom, true); return; }
-    GeomApp.boot(createSim(), false);
+  const fromUnreal = new URLSearchParams(location.search).get('host') === 'ue';
+  const hasBridge = () => !!(window.ue && window.ue.geom);
+
+  // Ouverte par Unreal (?host=ue) : la liaison window.ue.geom peut arriver un peu après
+  // les scripts, on l'attend. Jamais de simulation dans ce cas : une erreur visible vaut mieux.
+  function waitForBridge(tries) {
+    if (hasBridge()) { GeomApp.boot(window.ue.geom, true); return; }
+    if (tries <= 0) { GeomApp.fail('Pont ue.geom absent : voir LogMaths_T1'); return; }
+    setTimeout(() => waitForBridge(tries - 1), 100);
   }
-  // La liaison permanente d'Unreal est présente avant les scripts ; on laisse une marge par prudence
-  if (window.ue && window.ue.geom) start(); else setTimeout(start, 250);
+  if (fromUnreal) { document.body.classList.add('ue'); waitForBridge(50); }        // 5 s
+  else if (hasBridge()) GeomApp.boot(window.ue.geom, true);
+  else setTimeout(() => (hasBridge() ? GeomApp.boot(window.ue.geom, true) : GeomApp.boot(createSim(), false)), 250);
 
   function createSim() {
     const cv = document.getElementById('scene'), ctx = cv.getContext('2d');

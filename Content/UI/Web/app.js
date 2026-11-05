@@ -230,4 +230,10 @@ function boot(geom, isUE) {
   geom.ready();
   if (isUE) geom.log('Panneau chargé');
 }
-window.GeomApp = { boot };
+function fail(message) {
+  const pill = $('bridge');
+  pill.textContent = 'pont absent'; pill.classList.add('error'); pill.title = message;
+  $('callIo').textContent = message;
+  setVerdict('bad', 'Le panneau ne reçoit rien du C++');
+}
+window.GeomApp = { boot, fail };

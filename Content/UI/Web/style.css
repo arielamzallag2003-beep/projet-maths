@@ -38,7 +38,7 @@ kbd { font: 500 .7rem var(--font-mono); color: var(--dim); }
   --accent: var(--hull);
   position: fixed; top: 12px; left: 12px; bottom: 12px; width: 27rem; max-width: calc(100% - 24px);
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  display: grid; grid-template-rows: auto auto auto 1fr auto; overflow: hidden;
+  display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; overflow: hidden;
 }
 body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; border: 0; }
 .panel[data-family="tri"] { --accent: var(--tri); }
@@ -49,6 +49,7 @@ body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; borde
 .brand b { display: block; font: 600 1.25rem/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
 .brand small { color: var(--mute); font-size: .8rem; }
 .pill { font: 500 .72rem/1 var(--font-mono); padding: .38rem .6rem; border-radius: 999px; white-space: nowrap; border: 1px solid #2c5a40; color: var(--good); background: #11241a; }
+.pill.error { border-color: #5a2230; color: var(--bad); background: #24101a; }
 .pill.simulated { border-color: #5a4a22; color: var(--warn); background: #221c0e; }
 .pill::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: .4rem; vertical-align: 1px; }
 

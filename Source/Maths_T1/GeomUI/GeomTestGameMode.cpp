@@ -41,15 +41,26 @@ void AGeomTestGameMode::BeginPlay()
 
 	Bridge = NewObject<UGeomBridge>(this);
 	Bridge->Init(Visualizer, nullptr, Browser);
-	if (Browser.IsValid())
-	{
-		// Liaison permanente AVANT le chargement : window.ue.geom existe dès le premier script
-		Browser->BindUObject(TEXT("geom"), Bridge, true);
-		const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() / PagePath);
-		Browser->LoadURL(TEXT("file:///") + File);
-	}
-
+	LoadPage();
 	TryWireController();
+}
+
+void AGeomTestGameMode::LoadPage()
+{
+	if (!Browser.IsValid() || !Bridge) return;
+	++LoadAttempts;
+	SinceLoad = 0.f;
+
+	// Liaison permanente AVANT le chargement : window.ue.geom pour tous les scripts de la page.
+	// On la refait à chaque tentative : si la fenêtre CEF n'existait pas encore, elle a pu être ignorée.
+	Browser->UnbindUObject(TEXT("geom"), Bridge, true);
+	Browser->BindUObject(TEXT("geom"), Bridge, true);
+
+	// ?host=ue : la page sait qu'elle est dans Unreal et attend le pont au lieu de simuler
+	const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectContentDir() / PagePath);
+	const FString Url = TEXT("file:///") + File + TEXT("?host=ue");
+	UE_LOG(LogMaths_T1, Log, TEXT("Chargement du panneau (essai %d) : %s"), LoadAttempts, *Url);
+	Browser->LoadURL(Url);
 }
 
 bool AGeomTestGameMode::TryWireController()
@@ -149,6 +160,27 @@ void AGeomTestGameMode::Tick(float DeltaSeconds)
 	if (Bridge)
 	{
 		Bridge->Flush(DeltaSeconds);
+
+		// La page appelle ready() au chargement. Sans nouvelles, on relie et on recharge.
+		if (!Bridge->IsReady() && Browser.IsValid())
+		{
+			SinceLoad += DeltaSeconds;
+			if (SinceLoad > 6.f)
+			{
+				if (LoadAttempts < 3)
+				{
+					UE_LOG(LogMaths_T1, Warning, TEXT("Le panneau n'a pas appelé ready() : nouvelle liaison et rechargement."));
+					LoadPage();
+				}
+				else if (LoadAttempts == 3)
+				{
+					++LoadAttempts;
+					const FString Msg = TEXT("Panneau web : pont ue.geom non joignable après 3 essais (voir LogMaths_T1).");
+					UE_LOG(LogMaths_T1, Error, TEXT("%s"), *Msg);
+					if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 30.f, FColor::Red, Msg);
+				}
+			}
+		}
 	}
 }
 
