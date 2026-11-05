@@ -1,13 +1,30 @@
 #include "GeometryMathLibrary.h"
 
-float UGeometryMathLibrary::CrossProduct2D(const FVector& A, const FVector& B)
+float UGeometryMathLibrary::CrossProduct2D(const FVector& u, const FVector& v)
 {
-    return A.X * B.Y - A.Y * B.X;
+    return u.X * v.Y - u.Y * v.X;
 }
 
-float UGeometryMathLibrary::Orient2D(const FVector& A, const FVector& B, const FVector& C)
+float UGeometryMathLibrary::DotProduct2D(const FVector& u, const FVector& v)
 {
-    return (B.X - A.X) * (C.Y - A.Y) - (B.Y - A.Y) * (C.X - A.X);
+    return u.X * v.X + u.Y * v.Y;
+}
+
+float UGeometryMathLibrary::OrientAngle2D(const FVector& A, const FVector& B, const FVector& C)
+{
+    FVector BA = A - B;
+    FVector BC = C - B;
+    return CrossProduct2D(BA, BC);
+}
+
+float UGeometryMathLibrary::GetAngle(const FVector& v, const FVector& u)
+{
+    return acos(DotProduct2D(v, u)/(GetNorm(v) * GetNorm(u)));
+}
+
+float UGeometryMathLibrary::GetNorm(const FVector& v)
+{
+    return sqrt(v.X * v.X + v.Y * v.Y);
 }
 
 float UGeometryMathLibrary::MatrixDeterminant3x3(const FMatrix& Matrix)
@@ -23,9 +40,9 @@ bool UGeometryMathLibrary::InverseMatrix3x3(const FMatrix& InMatrix, FMatrix& Ou
 
 bool UGeometryMathLibrary::IsPointInsideTriangle2D(const FVector& P, const FVector& A, const FVector& B, const FVector& C)
 {
-    float d1 = Orient2D(P, A, B);
-    float d2 = Orient2D(P, B, C);
-    float d3 = Orient2D(P, C, A);
+    float d1 = OrientAngle2D(P, A, B);
+    float d2 = OrientAngle2D(P, B, C);
+    float d3 = OrientAngle2D(P, C, A);
 
     bool hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
     bool hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
@@ -69,56 +86,6 @@ FVector UGeometryMathLibrary::GetCircumcenter2D(const FVector& A, const FVector&
     return Center;
 }
 
-FVector UGeometryMathLibrary::GetSphereCircumcenter3D(const FVector& A, const FVector& B, const FVector& C, const FVector& D, float& OutRadiusSquared)
-{
-    FMatrix M(
-        FPlane(B.X - A.X, B.Y - A.Y, B.Z - A.Z, 0.0f),
-        FPlane(C.X - A.X, C.Y - A.Y, C.Z - A.Z, 0.0f),
-        FPlane(D.X - A.X, D.Y - A.Y, D.Z - A.Z, 0.0f),
-        FPlane(0.0f, 0.0f, 0.0f, 1.0f)
-    );
-
-    float Det = M.Determinant();
-    if (FMath::IsNearlyZero(Det))
-    {
-        OutRadiusSquared = 0.0f;
-        return A;
-    }
-
-    float LenA = A.SizeSquared();
-    float LenB = B.SizeSquared();
-    float LenC = C.SizeSquared();
-    float LenD = D.SizeSquared();
-
-    FMatrix M1(
-        FPlane(LenB - LenA, B.Y - A.Y, B.Z - A.Z, 0.0f),
-        FPlane(LenC - LenA, C.Y - A.Y, C.Z - A.Z, 0.0f),
-        FPlane(LenD - LenA, D.Y - A.Y, D.Z - A.Z, 0.0f),
-        FPlane(0.0f, 0.0f, 0.0f, 1.0f)
-    );
-
-    FMatrix M2(
-        FPlane(B.X - A.X, LenB - LenA, B.Z - A.Z, 0.0f),
-        FPlane(C.X - A.X, LenC - LenA, C.Z - A.Z, 0.0f),
-        FPlane(D.X - A.X, LenD - LenA, D.Z - A.Z, 0.0f),
-        FPlane(0.0f, 0.0f, 0.0f, 1.0f)
-    );
-
-    FMatrix M3(
-        FPlane(B.X - A.X, B.Y - A.Y, LenB - LenA, 0.0f),
-        FPlane(C.X - A.X, C.Y - A.Y, LenC - LenA, 0.0f),
-        FPlane(D.X - A.X, D.Y - A.Y, LenD - LenA, 0.0f),
-        FPlane(0.0f, 0.0f, 0.0f, 1.0f)
-    );
-
-    float X = M1.Determinant() / (2.0f * Det);
-    float Y = M2.Determinant() / (2.0f * Det);
-    float Z = M3.Determinant() / (2.0f * Det);
-
-    FVector Center(X, Y, Z);
-    OutRadiusSquared = FVector::DistSquared(Center, A);
-    return Center;
-}
 
 bool UGeometryMathLibrary::IsInsideCircumcircle(const FVector& A, const FVector& B, const FVector& C, const FVector& D)
 {

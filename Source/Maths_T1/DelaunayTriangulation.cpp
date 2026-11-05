@@ -3,22 +3,67 @@
 
 void UDelaunayTriangulation::IncrementalTriangulation2D(
 	const TArray<FVector>& InputPoints, 
-	TArray<FGeomVertex>& OutVertices, 
-	TArray<FGeomEdge>& OutEdges, 
-	TArray<FGeomFace>& OutFaces)
+    TArray<FGeomVertex>& OutVertices, 
+    TArray<FGeomEdge>& OutEdges, 
+    TArray<FGeomFace>& OutFaces)
 {
-	// TODO: Étape 1 - Trier les points par abscisse (et ordonnée) croissante [Cours 4]
+    OutVertices.Empty();
+    OutEdges.Empty();
+    OutFaces.Empty();
 
-	// TODO: Étape 2 - Initialiser la triangulation avec les k premiers points colinéaires + 1 [Cours 4]
-
-	// TODO: Étape 3 - Pour chaque nouveau point P_q+1, trouver les arêtes "vues" et ajouter les nouveaux triangles [Cours 4]
+    // TODO :
 }
 
 void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArray<FGeomFace>& Faces)
 {
-	// TODO: Parcourir la liste des arêtes non conformes [Cours 4]
-	// TODO: Tester le critère de Delaunay (IsInsideCircumcircle) sur chaque arête commune à deux faces
-	// TODO: Si non conforme, inverser/basculer l'arête (S3-S4 -> S1-S2) et mettre à jour le graphe d'incidence
+	bool bHasFlipped;
+	do
+	{
+		bHasFlipped = false;
+
+		for (FGeomEdge& Edge : Edges)
+		{
+			if (Edge.LeftFace == nullptr || Edge.RightFace == nullptr)
+			{
+				continue;
+			}
+
+			FGeomFace* Face1 = Edge.LeftFace;
+			FGeomFace* Face2 = Edge.RightFace;
+
+			FGeomVertex* V1 = Edge.V1;
+			FGeomVertex* V2 = Edge.V2;
+			FGeomVertex* Opp1 = nullptr;
+			FGeomVertex* Opp2 = nullptr;
+
+			for (int32 i = 0; i < 3; ++i)
+			{
+				if (Face1->Vertices[i] != V1 && Face1->Vertices[i] != V2)
+				{
+					Opp1 = Face1->Vertices[i];
+				}
+				if (Face2->Vertices[i] != V1 && Face2->Vertices[i] != V2)
+				{
+					Opp2 = Face2->Vertices[i];
+				}
+			}
+
+			if (!Opp1 || !Opp2) continue;
+
+			// Test du critère de Delaunay
+			if (UGeometryMathLibrary::IsInsideCircumcircle(V1->Position, V2->Position, Opp1->Position, Opp2->Position))
+			{
+				// on flip l'arête [V1, V2] (devient [Opp1, Opp2])
+				Edge.V1 = Opp1;
+				Edge.V2 = Opp2;
+
+				// TODO : Mise à jour de la topologie des faces adjacentes
+				// (Le quadrilatère [V1, Opp1, V2, Opp2] est réorganisé)
+				bHasFlipped = true;
+				break;
+			}
+		}
+	} while (bHasFlipped);
 }
 
 void UDelaunayTriangulation::DelaunayKernel_AddPoint(
@@ -27,11 +72,7 @@ void UDelaunayTriangulation::DelaunayKernel_AddPoint(
 	TArray<FGeomEdge>& Edges, 
 	TArray<FGeomFace>& Faces)
 {
-	// TODO: Cas A - Pas de triangle (sommets colinéaires) [Cours 4]
-    
-	// TODO: Cas B - Contient des triangles [Cours 4]
-	// - Cas B1 : Le point est à l'intérieur d'un triangle -> supprimer le triangle et relier aux 3 arêtes
-	// - Cas B2 : Le point est hors de la triangulation -> chercher les arêtes externes dont le cercle circonscrit contient P
+	// TODO :
 }
 
 void UDelaunayTriangulation::DelaunayKernel_RemovePoint(
@@ -40,6 +81,5 @@ void UDelaunayTriangulation::DelaunayKernel_RemovePoint(
 	TArray<FGeomEdge>& Edges, 
 	TArray<FGeomFace>& Faces)
 {
-	// TODO: Trouver et supprimer le sommet s, les arêtes incidentes et les triangles incidents [Cours 4]
-	// TODO: Re-trianguler le trou polygonal créé (liste La2) [Cours 4]
+	// TODO :
 }
