@@ -35,10 +35,52 @@ Tout le code des algorithmes est dans `Source/Maths_T1/` :
 | `GeometryMathLibrary.*` | Primitives : orientation, déterminant, cercle circonscrit, critère de Delaunay |
 | `ConvexHullAlgorithms.*` | Marche de Jarvis, Graham scan |
 | `DelaunayTriangulation.*` | Triangulation incrémentale, flips, noyau de Delaunay (ajout / suppression) |
+| `GeomUI/` | Scène de test de l'UI (voir plus bas), sans lien avec les algorithmes |
 
 Toutes les fonctions sont exposées en Blueprint (`UBlueprintFunctionLibrary`), catégorie *Geometry*.
 
 Les dossiers `Variant_Strategy/` et `Variant_TwinStick/` viennent du template Top Down.
+
+## Scène de test de l'UI
+
+Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms` et `DelaunayTriangulation` telles qu'elles sont, sans rien y changer.
+
+### Mise en place (une seule fois)
+
+1. Compiler le projet (le module dépend maintenant de `WebBrowser`).
+2. Dans l'éditeur : *File → New Level → Empty Level*, enregistrer sous `Content/Tests/LVL_TestUI`.
+3. *Window → World Settings → GameMode Override* : choisir **GeomTestGameMode**. Enregistrer.
+4. *Play* (PIE). Le panneau apparaît à gauche, un nuage de 30 points est créé.
+
+Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseur et le panneau.
+
+### Ce qu'on peut tester
+
+- Les 4 fonctions (touches `1` à `4`) sur des nuages types : disque, gaussien, amas, cercle, grille (points cocycliques), alignés.
+- Ajouter, déplacer, supprimer des points à la souris ; le résultat se recalcule à chaque modification.
+- Le **mode noyau** (Delaunay) : les ajouts et suppressions passent par `DelaunayKernel_AddPoint` / `DelaunayKernel_RemovePoint`.
+- L'onglet **Vérifications** teste la sortie réelle : polygone convexe en sens trigonométrique, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, critère de Delaunay, comparaison avec une référence JS. Une sortie vide est signalée comme « fonction encore à écrire ».
+- Calques : référence JS en gris, cercles circonscrits, Voronoï.
+
+### Fichiers
+
+| Fichier | Rôle |
+|---|---|
+| `Source/Maths_T1/GeomUI/GeomTestGameMode.*` | Crée tout, affiche le panneau (`SWebBrowser`) dans un rectangle à gauche |
+| `Source/Maths_T1/GeomUI/GeomVisualizer.*` | Garde les points, appelle les algorithmes, dessine les résultats (DrawDebug) |
+| `Source/Maths_T1/GeomUI/GeomTestPawn.*` | Caméra orthographique, X à droite et Y en haut |
+| `Source/Maths_T1/GeomUI/GeomTestPlayerController.*` | Souris et clavier dans le niveau |
+| `Source/Maths_T1/GeomUI/GeomBridge.*` | Pont JS ↔ C++ (`window.ue.geom`) |
+| `Content/UI/Web/` | Le panneau : `index.html`, `style.css`, `app.js`, `reference.js`, `sim.js` |
+
+### Travailler sur la page sans Unreal
+
+Ouvrir `Content/UI/Web/index.html` dans Chrome : `sim.js` remplace le C++ et simule le niveau, avec les outils de développement habituels. `index.html#vide` simule des fonctions pas encore écrites.
+
+### Limites connues
+
+- Le dessin utilise `DrawDebug*` : rien ne s'affiche dans un build *Shipping*. Tester en PIE ou en *Development*.
+- Les fonctions renvoient seulement leur résultat final : pas de lecture pas à pas dans Unreal.
 
 ## Contribuer
 
