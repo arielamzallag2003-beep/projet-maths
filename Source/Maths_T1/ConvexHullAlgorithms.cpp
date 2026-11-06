@@ -30,46 +30,31 @@ TArray<FVector> UConvexHullAlgorithms::ComputeJarvisMarch(const TArray<FVector>&
 	}
 	
 	
-	FVector v(0, -1, 0);
 	int i = i0;
 
 	//trouver chaque point de l'enveloppe convexe
 	do
 	{
 		ConvexHull.Add(Points[i]);
-		
-		int j;
-		if (i == 0)
-		{
-			j = 1;
-		}
-		else
-		{
-			j = 0;
-		}
-		FVector PiPj = Points[j] - Points[i];
-		float amin = GetAngle(v, PiPj);
-		float lmax = GetNorm(PiPj);
-		int inew = j;
 
-		for (j = inew + 1; j < Points.Num(); j++)
+		// On garde le candidat inew tant qu'aucun point n'est à sa droite (vu depuis Points[i]) ;
+		// à égalité (alignés), on prend le plus loin. Pas d'angle : acos en float donnait NaN
+		// (doublons, retour sur le sommet précédent) ou manquait de précision (points presque alignés).
+		int inew = -1;
+		for (int j = 0; j < Points.Num(); j++)
 		{
-			if (j != i)
+			if (Points[j] == Points[i]) continue; // le point lui-même ou un doublon : pas de direction
+			if (inew == -1) { inew = j; continue; }
+			const float Orient = OrientAngle2D(Points[i], Points[inew], Points[j]);
+			if (Orient < 0.0f || (Orient == 0.0f && FVector::DistSquared(Points[i], Points[j]) > FVector::DistSquared(Points[i], Points[inew])))
 			{
-				PiPj = Points[j] - Points[i];
-				float a = GetAngle(v, PiPj);
-				if (a < amin || (a == amin && GetNorm(PiPj) > lmax))
-				{
-					amin = a;
-					lmax = GetNorm(PiPj);
-					inew = j;
-				}
+				inew = j;
 			}
 		}
-		v = FVector(Points[inew].X - Points[i].X, Points[inew].Y - Points[i].Y, 0);
+		if (inew == -1) break; // tous les points sont confondus
 		i = inew;
 	}
-	while (i != i0);
+	while (Points[i] != Points[i0]); // positions et pas indices : un doublon du départ ferme aussi l'enveloppe
 	
 	
 	return ConvexHull;
