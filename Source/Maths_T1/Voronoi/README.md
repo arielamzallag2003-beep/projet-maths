@@ -88,6 +88,7 @@ Les trois fonctions sont aussi disponibles en Blueprint, catégorie *Geometry �
 | `ComputeVoronoiHalfPlanes(Sites, BoundsMargin, OutCells, OutBoundsMin, OutBoundsMax)` | Une région par site, dans l'ordre d'entrée. `BoundsMargin` ≤ 0 : marge automatique, max(moitié de la plus grande dimension du nuage, 100 cm) |
 | `ExtractVoronoiEdges(Cells)` | Les arêtes du diagramme, une fois chacune, avec les deux sites qu'elles séparent |
 | `ExtractVoronoiVertices(Cells, BoundsMin, BoundsMax, Tolerance)` | Les sommets (points où se rejoignent au moins trois régions), sans ceux du cadre |
+| `ComputeVoronoiCellSteps(Sites, SiteIndex, BoundsMargin, OutSteps, OutSkippedSites, ...)` | La construction d'**une** région, étape par étape : le cadre, puis une étape par médiatrice essayée (polygone obtenu, partie retirée, a-t-elle coupé). La dernière étape est exactement la région de `ComputeVoronoiHalfPlanes` : les deux passent par le même code |
 
 | Champ de `FVoronoiCell` | Sens |
 |---|---|
@@ -111,6 +112,12 @@ L'onglet **Vérifications** contrôle la sortie réelle du C++ :
 - **dualité avec Delaunay** : un sommet par triangle de Delaunay dont le centre du cercle circonscrit tombe dans le cadre, et une arête par arête de Delaunay quand tous ces centres y tombent. À titre indicatif si des sites sont cocycliques.
 
 Le banc d'essai passe les 14 cas fixes (dont les cas limites : alignés, doublons, cocycliques, nuage de 6 cm). Dans l'onglet **Calques**, *Triangulation duale* superpose la triangulation de Delaunay de référence pour voir la dualité, et *Cercles circonscrits* montre que chaque sommet du diagramme est le centre d'un cercle vide.
+
+Dans le niveau :
+
+- **survoler un site** met sa région en valeur et relie ses voisins en pointillés : ce sont les arêtes de Delaunay ;
+- **survoler un sommet** affiche son cercle vide, qui passe par les sites à égale distance (au moins trois) ;
+- **construction pas à pas** (onglet *Scène*) : cliquer un point, puis avancer étape par étape ou lancer la lecture. La médiatrice testée est en pointillés rouges, la partie retirée en rose, la région en cours en turquoise. L'option *Sauter les médiatrices qui ne coupent rien* ne garde que les découpes utiles ; à la fin, le panneau indique combien de sites l'arrêt anticipé a évité d'essayer.
 
 ## Suite possible
 

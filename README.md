@@ -64,14 +64,21 @@ Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseu
 - **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï, triangulation duale (avec Voronoï).
 - **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou tous d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
 - **Exporter / importer** une scène en texte, pour partager un cas qui plante.
+- **Voronoï** : survoler un point met sa région en valeur et relie ses voisins (les arêtes de Delaunay) ; survoler un sommet montre son cercle vide. La **construction pas à pas** (onglet *Scène*) découpe la région d'un point médiatrice par médiatrice, avec lecture automatique.
 - Survoler un point affiche ses informations en bas du panneau. Les réglages du panneau sont mémorisés.
+
+### Rendu
+
+La scène est dessinée en 2D sur le Canvas du HUD (`AGeomHUD`, `FGeomCanvas`) : traits d'épaisseur constante à l'écran avec bords adoucis, régions remplies en dégradé, points en disques, étiquettes qui ne se chevauchent pas. Les tailles suivent l'échelle DPI, comme le panneau. La simulation navigateur (`sim.js`) dessine la même chose avec les mêmes couleurs : on règle l'apparence dans Chrome, puis on la reporte dans `AGeomVisualizer::Paint`.
 
 ### Fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `Source/Maths_T1/GeomUI/GeomTestGameMode.*` | Crée tout, affiche le panneau (`SWebBrowser`) dans un rectangle à gauche |
-| `Source/Maths_T1/GeomUI/GeomVisualizer.*` | Garde les points, appelle les algorithmes, dessine les résultats (DrawDebug) |
+| `Source/Maths_T1/GeomUI/GeomVisualizer.*` | Garde les points, appelle les algorithmes, dessine les résultats (`Paint`) |
+| `Source/Maths_T1/GeomUI/GeomHUD.*` | HUD qui appelle `Paint` à chaque frame |
+| `Source/Maths_T1/GeomUI/GeomCanvas.*` | Dessin 2D antialiasé sur le Canvas : traits, pointillés, disques, polygones, texte |
 | `Source/Maths_T1/GeomUI/GeomTestPawn.*` | Caméra orthographique, X à droite et Y en haut |
 | `Source/Maths_T1/GeomUI/GeomTestPlayerController.*` | Souris et clavier dans le niveau |
 | `Source/Maths_T1/GeomUI/GeomBridge.*` | Pont JS ↔ C++ (`window.ue.geom`) |
@@ -83,7 +90,6 @@ Ouvrir `Content/UI/Web/index.html` dans Chrome : `sim.js` remplace le C++ (avec 
 
 ### Limites connues
 
-- Le dessin utilise `DrawDebug*` : rien ne s'affiche dans un build *Shipping*. Tester en PIE ou en *Development*.
 - Les fonctions renvoient seulement leur résultat final : pas de lecture pas à pas dans Unreal.
 
 ## Contribuer
