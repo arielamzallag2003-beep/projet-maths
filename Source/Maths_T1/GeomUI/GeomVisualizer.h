@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GeometryTypes.h"
+#include "VoronoiDiagram.h"
 #include "GeomVisualizer.generated.h"
 
 DECLARE_MULTICAST_DELEGATE(FOnGeomChanged);
@@ -13,7 +14,8 @@ enum class EGeomAlgorithm : uint8
 	Jarvis,
 	Graham,
 	Incremental,
-	Delaunay
+	Delaunay,
+	Voronoi
 };
 
 /** Segment 2D à dessiner (calques envoyés par la page : référence, Voronoï, cercles...). */
@@ -87,6 +89,13 @@ private:
 	TArray<FGeomEdge> Edges;
 	TArray<FGeomFace> Faces;
 	bool bHasTriangulation = false;
+
+	// Diagramme de Voronoï (Source/Maths_T1/Voronoi, indépendant des autres algorithmes)
+	TArray<FVoronoiCell> VoronoiCells;
+	TArray<FVoronoiEdge> VoronoiEdges;
+	int32 VoronoiVertexCount = 0;
+	FVector VoronoiBoundsMin = FVector::ZeroVector;
+	FVector VoronoiBoundsMax = FVector::ZeroVector;
 
 	// Résultats extraits pour le dessin et la page
 	TArray<TArray<FVector>> ResultTriangles;

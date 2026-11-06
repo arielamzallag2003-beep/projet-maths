@@ -100,6 +100,7 @@ void UGeomBridge::SetAlgorithm(const FString& Id)
 	else if (Id == TEXT("graham")) A = EGeomAlgorithm::Graham;
 	else if (Id == TEXT("incr")) A = EGeomAlgorithm::Incremental;
 	else if (Id == TEXT("delaunay")) A = EGeomAlgorithm::Delaunay;
+	else if (Id == TEXT("voronoi")) A = EGeomAlgorithm::Voronoi;
 	else { UE_LOG(LogMaths_T1, Warning, TEXT("Algorithme inconnu : %s"), *Id); return; }
 
 	Algorithm = Id;

@@ -40,6 +40,7 @@ void AGeomTestPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AGeomTestPlayerController::OnKey2);
 	InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AGeomTestPlayerController::OnKey3);
 	InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &AGeomTestPlayerController::OnKey4);
+	InputComponent->BindKey(EKeys::Five, IE_Pressed, this, &AGeomTestPlayerController::OnKey5);
 	InputComponent->BindKey(EKeys::A, IE_Pressed, this, &AGeomTestPlayerController::OnToolAdd);
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGeomTestPlayerController::OnToolMove);
 	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AGeomTestPlayerController::OnToolDelete);

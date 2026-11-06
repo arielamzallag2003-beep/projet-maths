@@ -148,6 +148,46 @@ const Geo = (() => {
     return segs;
   }
 
+  /* ---- Voronoï par intersection de demi-plans : même méthode que UVoronoiDiagram (C++),
+     écrite à part. P sans doublons. Renvoie [{ site, poly: [{x, y}], nb: [indice du voisin
+     de l'arête poly[k] -> poly[k+1], ou -1 pour le cadre] }], chaque poly en sens trigo. ---- */
+  function voronoiBounds(P) {
+    const xs = P.map((p) => p.x), ys = P.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const m = Math.max(0.5 * Math.max(maxX - minX, maxY - minY), 100);
+    return { minX: minX - m, minY: minY - m, maxX: maxX + m, maxY: maxY + m };
+  }
+  function voronoiCells(P, B) {
+    const scale = Math.max(B.maxX - B.minX, B.maxY - B.minY), eps = 1e-9 * scale, merge = 1e-6 * scale;
+    return P.map((pi, i) => {
+      let poly = [{ x: B.minX, y: B.minY, nb: -1 }, { x: B.maxX, y: B.minY, nb: -1 }, { x: B.maxX, y: B.maxY, nb: -1 }, { x: B.minX, y: B.maxY, nb: -1 }];
+      P.forEach((pj, j) => {
+        if (j === i) return;
+        const dx = pj.x - pi.x, dy = pj.y - pi.y, L = Math.hypot(dx, dy); if (!L) return;
+        const nx = dx / L, ny = dy / L, mx = (pi.x + pj.x) / 2, my = (pi.y + pj.y) / 2;
+        const f = (v) => nx * (v.x - mx) + ny * (v.y - my), out = [];
+        poly.forEach((a, k) => {
+          const b = poly[(k + 1) % poly.length], fa = f(a), fb = f(b), ina = fa <= eps, inb = fb <= eps;
+          if (ina) out.push(a);
+          if (ina !== inb) { const t = Math.min(1, Math.max(0, fa / (fa - fb))); out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, nb: ina ? j : a.nb }); }
+        });
+        poly = out;
+        for (let k = 0; poly.length > 3 && k < poly.length;) { const q = poly[(k + 1) % poly.length]; if (Math.hypot(poly[k].x - q.x, poly[k].y - q.y) <= merge) poly.splice(k, 1); else k++; }
+      });
+      return { site: pi, poly: poly.map((v) => ({ x: v.x, y: v.y })), nb: poly.map((v) => v.nb) };
+    });
+  }
+  // Arêtes d'un ensemble de régions : [[a, b, siteA, siteB]], une par paire de sites
+  function voronoiEdgesOf(cells) {
+    const seen = new Map();
+    cells.forEach((c, i) => c.nb.forEach((j, k) => {
+      if (j < 0) return;
+      const a = c.poly[k], b = c.poly[(k + 1) % c.poly.length], kk = key(c.site, cells[j].site), len = Math.hypot(a.x - b.x, a.y - b.y);
+      const old = seen.get(kk); if (!old || len > old.len) seen.set(kk, { seg: [a, b, c.site, cells[j].site], len });
+    }));
+    return [...seen.values()].map((v) => v.seg);
+  }
+
   // Générateur pseudo-aléatoire reproductible (mulberry32) : même graine, même nuage
   function rng(seed) {
     let a = seed >>> 0;
@@ -192,7 +232,7 @@ const Geo = (() => {
   // Positions distinctes (les doublons exacts ne comptent qu'une fois)
   function unique(P) { const seen = new Set(); return P.filter((p) => { const k = pk(p); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
-  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key };
+  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key, voronoiBounds, voronoiCells, voronoiEdgesOf };
 })();
 
 /* ---------- Vérifications d'un résultat renvoyé par le C++ ---------- */
@@ -208,6 +248,8 @@ function runChecks(res, rawPoints, refDelaunay) {
   const nonFinite = (res.counts && res.counts.nonFinite) || 0;
   if (rawPoints.length !== n) add(null, 'Doublons dans l\'entrée', `${rawPoints.length - n} ignoré${rawPoints.length - n > 1 ? 's' : ''}`, 'Les tests comptent chaque position une seule fois ; la fonction doit supporter les doublons sans planter.');
   if (nonFinite) add(false, 'Coordonnées valides (pas de NaN)', `${nonFinite} invalide${nonFinite > 1 ? 's' : ''}`, 'Une division par zéro ou un pointeur non initialisé a produit NaN ou l\'infini ; remplacé par 0 pour l\'affichage.');
+
+  if (res.kind === 'voronoi') { checkVoronoi(res, points, add, refDelaunay); return out; }
 
   if (res.kind === 'hull') {
     const hull = res.hull;
@@ -255,4 +297,73 @@ function runChecks(res, rawPoints, refDelaunay) {
     }
   }
   return out;
+}
+
+/* ---------- Vérifications d'un diagramme de Voronoï renvoyé par le C++ ----------
+   Les tests 1 à 5 vérifient la définition elle-même (site le plus proche), sans référence.
+   Les suivants comparent avec la référence JS et avec la dualité de Delaunay. */
+function checkVoronoi(res, points, add, refDelaunay) {
+  const cells = res.cells || [], n = points.length, B = res.bounds;
+  add(cells.length > 0, 'La fonction renvoie des régions', `${cells.length} région${cells.length > 1 ? 's' : ''}`,
+      cells.length ? '' : 'Aucune région : la fonction est sans doute encore à écrire.');
+  if (!cells.length || !B) return;
+  const scale = Math.max(B.maxX - B.minX, B.maxY - B.minY), tol = 0.02 + 1e-6 * scale; // JSON arrondi à 0,01 cm
+  const bySite = new Map(points.map((p, i) => [Geo.pk(p), i]));
+
+  const unknown = cells.filter((c) => !bySite.has(Geo.pk(c.site))).length;
+  const sites = new Set(cells.map((c) => Geo.pk(c.site)));
+  add(cells.length === n && sites.size === n && !unknown, 'Une région par site', `${cells.length} / ${n}`,
+      unknown ? `${unknown} région(s) pour un site absent de l'entrée.` : sites.size < cells.length ? 'Deux régions pour le même site.' : '');
+
+  let notConvex = 0, siteOutside = 0, wrongNearest = 0, area = 0;
+  const nearestDist = (q) => { let best = Infinity; for (const p of points) best = Math.min(best, Math.hypot(q.x - p.x, q.y - p.y)); return best; };
+  for (const c of cells) {
+    const P = c.poly, m = P.length;
+    if (m < 3) { notConvex++; continue; }
+    let signed = 0, convex = true;
+    for (let k = 0; k < m; k++) {
+      const a = P[k], b = P[(k + 1) % m], d = P[(k + 2) % m];
+      signed += a.x * b.y - b.x * a.y;
+      if (Geo.orient(a, b, d) < -tol * Math.hypot(b.x - a.x, b.y - a.y)) convex = false;
+    }
+    if (!convex || signed <= 0) notConvex++;
+    area += Math.abs(signed) / 2;
+    if (!P.every((a, k) => Geo.orient(a, P[(k + 1) % m], c.site) >= -tol * Math.hypot(P[(k + 1) % m].x - a.x, P[(k + 1) % m].y - a.y))) siteOutside++;
+    // Définition : tout point de R_i a P_i comme site le plus proche. Testé sur les sommets
+    // (à égalité près) et sur le centre de gravité (strictement)
+    const own = (q) => Math.hypot(q.x - c.site.x, q.y - c.site.y);
+    const g = { x: P.reduce((s, v) => s + v.x, 0) / m, y: P.reduce((s, v) => s + v.y, 0) / m };
+    if (P.some((v) => own(v) - nearestDist(v) > tol) || own(g) - nearestDist(g) > tol) wrongNearest++;
+  }
+  add(notConvex === 0, 'Régions convexes, sens trigonométrique', notConvex ? `${notConvex} fausse${notConvex > 1 ? 's' : ''}` : 'oui',
+      notConvex ? 'Une intersection de demi-plans est toujours convexe : erreur de découpe ou d\'orientation.' : '');
+  add(siteOutside === 0, 'Chaque site est dans sa région', siteOutside ? `${siteOutside} dehors` : 'oui', siteOutside ? 'Souvent : demi-plan pris du mauvais côté de la médiatrice.' : '');
+  add(wrongNearest === 0, 'Le site le plus proche est le bon', wrongNearest ? `${wrongNearest} région${wrongNearest > 1 ? 's' : ''}` : 'oui',
+      wrongNearest ? 'Un point de la région est plus près d\'un autre site : un demi-plan manque.' : 'Vérifié sur chaque sommet et chaque centre de gravité.');
+  const box = (B.maxX - B.minX) * (B.maxY - B.minY), ratio = box ? area / box : 0;
+  add(Math.abs(ratio - 1) < 1e-4, 'Les régions pavent le cadre', `${(ratio * 100).toFixed(2).replace('.', ',')} %`,
+      ratio > 1 + 1e-4 ? 'Plus de 100 % : des régions se chevauchent.' : ratio < 1 - 1e-4 ? 'Moins de 100 % : il manque des morceaux.' : '');
+
+  // Référence JS : mêmes paires de voisins (mêmes arêtes)
+  const pairKey = (e) => Geo.key(e[2], e[3]);
+  const out = new Set((res.vedges || []).map(pairKey));
+  const refEdges = Geo.voronoiEdgesOf(Geo.voronoiCells(points, B)), refSet = new Set(refEdges.map(pairKey));
+  const missing = [...refSet].filter((k) => !out.has(k)).length, extra = [...out].filter((k) => !refSet.has(k)).length;
+  add(missing === 0 && extra === 0, 'Mêmes arêtes que la référence JS', missing || extra ? `${missing} manquante${missing > 1 ? 's' : ''}, ${extra} en trop` : `${out.size} / ${refSet.size}`, '');
+
+  // Dualité avec Delaunay (cours 5) : sommets <-> triangles, arêtes <-> arêtes. À titre indicatif :
+  // un sommet hors du cadre ou quatre sites presque cocycliques changent légitimement les nombres.
+  if (Geo.allCollinear(points)) {
+    add(res.counts.vertices === 0, 'Sites alignés : aucun sommet', `${res.counts.vertices}`, 'Le diagramme est fait de droites parallèles.');
+    return;
+  }
+  const T = refDelaunay ? refDelaunay() : Geo.delaunay(points).tris, b = Geo.hullWithBoundary(points).length;
+  // Chaque triangle donne un sommet : le centre de son cercle circonscrit, s'il tombe dans le cadre
+  const inside = T.map((t) => Geo.circumcircle(...t)).filter((c) => c && c.x > B.minX && c.x < B.maxX && c.y > B.minY && c.y < B.maxY).length;
+  const cocircular = Geo.hasCocircular(T), outside = T.length - inside;
+  const v = res.counts.vertices, e = res.counts.edges;
+  add(v === inside ? true : cocircular ? null : false, 'Dualité : un sommet par triangle de Delaunay', `${v} / ${inside}`,
+      cocircular ? 'Sites cocycliques : plusieurs triangles ont le même centre, donc moins de sommets.'
+        : `${T.length} triangles (2n − 2 − b = ${2 * n - 2 - b})${outside ? `, dont ${outside} avec un centre hors du cadre` : ''}.`);
+  if (!outside && !cocircular) add(e === 3 * n - 3 - b, 'Dualité : une arête par arête de Delaunay', `${e} / ${3 * n - 3 - b}`, '3n − 3 − b');
 }

@@ -77,6 +77,7 @@ private:
 	void OnKey2() { if (OnShortcut) OnShortcut(TEXT("algo:graham")); }
 	void OnKey3() { if (OnShortcut) OnShortcut(TEXT("algo:incr")); }
 	void OnKey4() { if (OnShortcut) OnShortcut(TEXT("algo:delaunay")); }
+	void OnKey5() { if (OnShortcut) OnShortcut(TEXT("algo:voronoi")); }
 	void OnKeyUndo();
 	void OnKeyRedo();
 	void OnToolAdd() { Tool = EGeomTool::Add; if (OnShortcut) OnShortcut(TEXT("tool:add")); }

@@ -37,11 +37,24 @@
     /* ---- « C++ » simulé ---- */
     function compute() {
       const P = Geo.unique(S.points), n = S.points.length, t0 = performance.now();
-      const res = { algo: S.algo, call: '', ms: 0, n, seq: ++S.seq, firstId: S.points.length ? S.points[0].id : 0, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0 } };
-      res.call = { jarvis: 'ComputeJarvisMarch', graham: 'ComputeGrahamScan', incr: 'IncrementalTriangulation2D', delaunay: 'IncrementalTriangulation2D + FlipEdgesToDelaunay' }[S.algo];
+      const res = { algo: S.algo, call: '', ms: 0, n, seq: ++S.seq, firstId: S.points.length ? S.points[0].id : 0, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : S.algo === 'voronoi' ? 'voronoi' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0 } };
+      res.call = { jarvis: 'ComputeJarvisMarch', graham: 'ComputeGrahamScan', incr: 'IncrementalTriangulation2D', delaunay: 'IncrementalTriangulation2D + FlipEdgesToDelaunay', voronoi: 'ComputeVoronoiHalfPlanes' }[S.algo];
       if (P.length >= 3 && !stub) {
         if (res.kind === 'hull') res.hull = Geo.hull(P).map((p) => [p.x, p.y]);
-        else {
+        else if (res.kind === 'voronoi') {
+          // Même format que AGeomVisualizer::ResultToJson
+          const B = Geo.voronoiBounds(P), cells = Geo.voronoiCells(P, B), edges = Geo.voronoiEdgesOf(cells);
+          const idOf = new Map(S.points.map((p) => [Geo.pk(p), p.id])), r2 = (v) => Math.round(v * 100) / 100;
+          res.cells = cells.map((c) => [idOf.get(Geo.pk(c.site)), c.nb.includes(-1) ? 1 : 0, c.site.x, c.site.y, ...c.poly.flatMap((v) => [r2(v.x), r2(v.y)])]);
+          res.vedges = edges.map((e) => [r2(e[0].x), r2(e[0].y), r2(e[1].x), r2(e[1].y), e[2].x, e[2].y, e[3].x, e[3].y]);
+          res.bounds = [r2(B.minX), r2(B.minY), r2(B.maxX), r2(B.maxY)];
+          const vs = [];
+          for (const c of cells) for (const v of c.poly) {
+            const onBox = Math.abs(v.x - B.minX) <= 0.01 || Math.abs(v.x - B.maxX) <= 0.01 || Math.abs(v.y - B.minY) <= 0.01 || Math.abs(v.y - B.maxY) <= 0.01;
+            if (!onBox && !vs.some((w) => Math.hypot(v.x - w.x, v.y - w.y) <= 0.01)) vs.push(v);
+          }
+          res.counts = { vertices: vs.length, edges: edges.length, faces: cells.length, invalidFaces: 0, invalidEdges: 0 };
+        } else {
           const tris = S.algo === 'delaunay' ? Geo.delaunay(P).tris : Geo.triangulate(P);
           res.tris = tris.map((t) => [t[0].x, t[0].y, t[1].x, t[1].y, t[2].x, t[2].y]);
           const b = Geo.hullWithBoundary(P).length;
@@ -120,6 +133,11 @@
         ctx.strokeStyle = '#469650'; ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x, 0); ctx.stroke();
       }
       const r = S.result;
+      if (r && S.layers.edges && r.kind === 'voronoi' && r.bounds) {
+        const [x0, y0, x1, y1] = r.bounds, c = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+        for (let i = 0; i < 4; i++) line(c[i], c[(i + 1) % 4], '#3c4a5e', 1);
+        for (const e of r.vedges) line({ x: e[0], y: e[1] }, { x: e[2], y: e[3] }, '#4fd1c5', 1.6);
+      }
       if (r && S.layers.edges) for (const t of r.tris) { const p = [{ x: t[0], y: t[1] }, { x: t[2], y: t[3] }, { x: t[4], y: t[5] }]; for (let i = 0; i < 3; i++) line(p[i], p[(i + 1) % 3], '#5fa8ff', 1.3); }
       for (const o of Object.values(S.overlays)) for (const s of o.segs) line({ x: s[0], y: s[1] }, { x: s[2], y: s[3] }, o.color, 1);
       if (r && S.layers.hull && r.hull.length > 1) { const h = r.hull.map((p) => ({ x: p[0], y: p[1] })); for (let i = 0; i < h.length; i++) line(h[i], h[(i + 1) % h.length], '#ffb547', 2.5); }

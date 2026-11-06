@@ -17,6 +17,8 @@ namespace GeomColors
 	const FColor Label(133, 146, 165);
 	const FColor Hover(255, 255, 255);
 	const FColor Drag(197, 139, 255);
+	const FColor Voronoi(79, 209, 197);
+	const FColor VoronoiBounds(60, 74, 94);
 }
 
 // Caméra en -Z : plus Z est petit, plus c'est proche de la caméra (donc devant).
@@ -228,6 +230,10 @@ void AGeomVisualizer::ClearResults()
 	InvalidFaces = 0;
 	InvalidEdges = 0;
 	bHasTriangulation = false;
+	VoronoiCells.Reset();
+	VoronoiEdges.Reset();
+	VoronoiVertexCount = 0;
+	VoronoiBoundsMin = VoronoiBoundsMax = FVector::ZeroVector;
 }
 
 void AGeomVisualizer::Recompute()
@@ -268,6 +274,11 @@ void AGeomVisualizer::Recompute()
 		UDelaunayTriangulation::FlipEdgesToDelaunay(Edges, Faces);
 		bHasTriangulation = true;
 		break;
+
+	case EGeomAlgorithm::Voronoi:
+		LastCall = TEXT("ComputeVoronoiHalfPlanes");
+		UVoronoiDiagram::ComputeVoronoiHalfPlanes(Points, 0.0, VoronoiCells, VoronoiBoundsMin, VoronoiBoundsMax);
+		break;
 	}
 	LastMs = (FPlatformTime::Seconds() - T0) * 1000.0;
 	++ResultSeq;
@@ -275,6 +286,12 @@ void AGeomVisualizer::Recompute()
 	if (bHasTriangulation)
 	{
 		ExtractTriangulation();
+	}
+	if (Algorithm == EGeomAlgorithm::Voronoi)
+	{
+		// Hors chronométrage : on ne mesure que le calcul des régions
+		VoronoiEdges = UVoronoiDiagram::ExtractVoronoiEdges(VoronoiCells);
+		VoronoiVertexCount = UVoronoiDiagram::ExtractVoronoiVertices(VoronoiCells, VoronoiBoundsMin, VoronoiBoundsMax, 0.01).Num();
 	}
 	OnResultChanged.Broadcast();
 }
@@ -383,7 +400,8 @@ FString AGeomVisualizer::PointsToJson() const
 FString AGeomVisualizer::ResultToJson() const
 {
 	const bool bTri = Algorithm == EGeomAlgorithm::Incremental || Algorithm == EGeomAlgorithm::Delaunay;
-	static const TCHAR* Names[] = { TEXT("jarvis"), TEXT("graham"), TEXT("incr"), TEXT("delaunay") };
+	const bool bVoronoi = Algorithm == EGeomAlgorithm::Voronoi;
+	static const TCHAR* Names[] = { TEXT("jarvis"), TEXT("graham"), TEXT("incr"), TEXT("delaunay"), TEXT("voronoi") };
 	int32 NonFinite = 0;
 
 	FString Body = TEXT("\"hull\":[");
@@ -408,14 +426,55 @@ FString AGeomVisualizer::ResultToJson() const
 	}
 	Body += TEXT("]");
 
+	// Voronoï. cells : [id, touche le cadre, x du site, y du site, x1, y1, x2, y2...] (une par site distinct)
+	// vedges : [x1, y1, x2, y2, xA, yA, xB, yB] (extrémités, puis les deux sites séparés)
+	int32 DistinctCells = 0;
+	if (bVoronoi)
+	{
+		Body += TEXT(",\"cells\":[");
+		for (const FVoronoiCell& Cell : VoronoiCells)
+		{
+			if (Cell.DuplicateOf != INDEX_NONE || !PointIds.IsValidIndex(Cell.SiteIndex))
+			{
+				continue;
+			}
+			Body += FString::Printf(TEXT("%s[%d,%d,%s,%s"), DistinctCells ? TEXT(",") : TEXT(""), PointIds[Cell.SiteIndex],
+				Cell.bTouchesBounds ? 1 : 0, *JsonNum(Cell.Site.X, NonFinite), *JsonNum(Cell.Site.Y, NonFinite));
+			for (const FVector& V : Cell.Polygon)
+			{
+				Body += FString::Printf(TEXT(",%s,%s"), *JsonNum(V.X, NonFinite), *JsonNum(V.Y, NonFinite));
+			}
+			Body += TEXT("]");
+			++DistinctCells;
+		}
+		Body += TEXT("],\"vedges\":[");
+		for (int32 i = 0; i < VoronoiEdges.Num(); ++i)
+		{
+			const FVoronoiEdge& E = VoronoiEdges[i];
+			const FVector SA = VoronoiCells.IsValidIndex(E.SiteA) ? VoronoiCells[E.SiteA].Site : FVector::ZeroVector;
+			const FVector SB = VoronoiCells.IsValidIndex(E.SiteB) ? VoronoiCells[E.SiteB].Site : FVector::ZeroVector;
+			Body += FString::Printf(TEXT("%s[%s,%s,%s,%s,%s,%s,%s,%s]"), i ? TEXT(",") : TEXT(""),
+				*JsonNum(E.A.X, NonFinite), *JsonNum(E.A.Y, NonFinite), *JsonNum(E.B.X, NonFinite), *JsonNum(E.B.Y, NonFinite),
+				*JsonNum(SA.X, NonFinite), *JsonNum(SA.Y, NonFinite), *JsonNum(SB.X, NonFinite), *JsonNum(SB.Y, NonFinite));
+		}
+		Body += FString::Printf(TEXT("],\"bounds\":[%s,%s,%s,%s]"),
+			*JsonNum(VoronoiBoundsMin.X, NonFinite), *JsonNum(VoronoiBoundsMin.Y, NonFinite),
+			*JsonNum(VoronoiBoundsMax.X, NonFinite), *JsonNum(VoronoiBoundsMax.Y, NonFinite));
+	}
+
+	// Pour Voronoï, les compteurs décrivent le diagramme : régions, arêtes, sommets
+	const int32 CountVertices = bVoronoi ? VoronoiVertexCount : Vertices.Num();
+	const int32 CountEdges = bVoronoi ? VoronoiEdges.Num() : Edges.Num();
+	const int32 CountFaces = bVoronoi ? DistinctCells : Faces.Num();
+
 	// seq : numéro du calcul ; firstId : identifiant du premier point (la page s'en sert pour
 	// reconnaître la réponse à une requête précise, par exemple pendant la batterie de tests)
 	return FString::Printf(
 		TEXT("{\"algo\":\"%s\",\"call\":\"%s\",\"ms\":%.4f,\"n\":%d,\"seq\":%d,\"firstId\":%d,\"kind\":\"%s\",\"kernel\":%s,%s,")
 		TEXT("\"counts\":{\"vertices\":%d,\"edges\":%d,\"faces\":%d,\"invalidFaces\":%d,\"invalidEdges\":%d,\"nonFinite\":%d}}"),
 		Names[(int32)Algorithm], *JsonString(LastCall), FMath::IsFinite(LastMs) ? LastMs : 0.0, Points.Num(), ResultSeq,
-		PointIds.Num() ? PointIds[0] : 0, bTri ? TEXT("tri") : TEXT("hull"), bKernelMode ? TEXT("true") : TEXT("false"), *Body,
-		Vertices.Num(), Edges.Num(), Faces.Num(), InvalidFaces, InvalidEdges, NonFinite);
+		PointIds.Num() ? PointIds[0] : 0, bVoronoi ? TEXT("voronoi") : bTri ? TEXT("tri") : TEXT("hull"), bKernelMode ? TEXT("true") : TEXT("false"), *Body,
+		CountVertices, CountEdges, CountFaces, InvalidFaces, InvalidEdges, NonFinite);
 }
 
 // ---------------------------------------------------------------- Dessin (DrawDebug, hors Shipping)
@@ -473,6 +532,20 @@ void AGeomVisualizer::Tick(float DeltaSeconds)
 			{
 				DrawLine(FVector2D(E.Key), FVector2D(E.Value), GeomColors::Tri, 1.3, GeomDepth::Triangles, SDPG_World);
 			}
+		}
+	}
+
+	// Diagramme de Voronoï : arêtes, et le cadre qui coupe les régions infinies
+	if (IsLayerOn(TEXT("edges")) && Algorithm == EGeomAlgorithm::Voronoi && VoronoiCells.Num())
+	{
+		const FVector2D Lo(VoronoiBoundsMin), Hi(VoronoiBoundsMax);
+		DrawLine(Lo, FVector2D(Hi.X, Lo.Y), GeomColors::VoronoiBounds, 1.0, GeomDepth::Triangles, SDPG_World);
+		DrawLine(FVector2D(Hi.X, Lo.Y), Hi, GeomColors::VoronoiBounds, 1.0, GeomDepth::Triangles, SDPG_World);
+		DrawLine(Hi, FVector2D(Lo.X, Hi.Y), GeomColors::VoronoiBounds, 1.0, GeomDepth::Triangles, SDPG_World);
+		DrawLine(FVector2D(Lo.X, Hi.Y), Lo, GeomColors::VoronoiBounds, 1.0, GeomDepth::Triangles, SDPG_World);
+		for (const FVoronoiEdge& E : VoronoiEdges)
+		{
+			DrawLine(FVector2D(E.A), FVector2D(E.B), GeomColors::Voronoi, 1.6, GeomDepth::Triangles, SDPG_World);
 		}
 	}
 

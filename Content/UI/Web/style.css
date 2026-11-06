@@ -42,6 +42,7 @@ kbd { font: 500 .7rem var(--font-mono); color: var(--dim); }
 }
 body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; border: 0; }
 .panel[data-family="tri"] { --accent: var(--tri); }
+.panel[data-family="voronoi"] { --accent: var(--voronoi); }
 .panel[data-algo="delaunay"] { --accent: var(--circle); }
 
 .top { display: flex; align-items: center; gap: .6rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
@@ -57,6 +58,7 @@ body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; borde
 .picker { padding: .75rem 1rem .85rem; border-bottom: 1px solid var(--line); display: grid; gap: .5rem; }
 .group { display: flex; justify-content: space-between; font: 600 .7rem/1 var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; }
+.seg.one { grid-template-columns: 1fr; }
 .seg button { position: relative; text-align: left; padding: .55rem .7rem .5rem; border-radius: 7px; cursor: pointer; border: 1px solid var(--line); background: var(--raise); display: grid; gap: .12rem; }
 .seg button:hover { border-color: var(--line-hi); }
 .seg button strong { font-size: .93rem; font-weight: 600; }

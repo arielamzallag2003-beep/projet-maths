@@ -46,7 +46,7 @@ public:
 	UFUNCTION()
 	void Ready();
 
-	/** "jarvis" | "graham" | "incr" | "delaunay" */
+	/** "jarvis" | "graham" | "incr" | "delaunay" | "voronoi" */
 	UFUNCTION()
 	void SetAlgorithm(const FString& Id);
 
