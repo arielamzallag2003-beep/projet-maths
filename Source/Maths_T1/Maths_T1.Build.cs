@@ -40,7 +40,8 @@ public class Maths_T1 : ModuleRules
 			"Maths_T1/Variant_TwinStick/AI",
 			"Maths_T1/Variant_TwinStick/Gameplay",
 			"Maths_T1/Variant_TwinStick/UI",
-			"Maths_T1/GeomUI"
+			"Maths_T1/GeomUI",
+			"Maths_T1/Voronoi"
 		});
 
 		// Uncomment if you are using Slate UI
