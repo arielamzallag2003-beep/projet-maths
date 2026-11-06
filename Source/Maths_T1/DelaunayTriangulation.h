@@ -24,4 +24,8 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "Geometry | Delaunay")
 	static void DelaunayKernel_RemovePoint(int32 VertexID, TArray<FGeomVertex>& Vertices, TArray<FGeomEdge>& Edges, TArray<FGeomFace>& Faces);
+
+	// Existence d'un Edge
+private:
+	static FGeomEdge* GetOrCreateEdge(TArray<FGeomEdge>& Edges, FGeomVertex* V1, FGeomVertex* V2);
 };

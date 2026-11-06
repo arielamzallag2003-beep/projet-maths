@@ -124,7 +124,7 @@ TArray<FVector> UConvexHullAlgorithms::ComputeGrahamScan(const TArray<FVector>& 
     do
     {
         // Test d'orientation du triplet (Précédent, Pivot, Suivant)
-        float Orient = OrientAngle2D(Pivot->Prec->Position, Pivot->Position, Pivot->Suiv->Position);
+        float Orient = OrientAngle2D(Pivot->Prec->Position, Pivot->Suiv->Position, Pivot->Position);
         
         if (Orient < 0.0f) // Cas convexe
         {

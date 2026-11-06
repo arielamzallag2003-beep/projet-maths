@@ -12,9 +12,9 @@ float UGeometryMathLibrary::DotProduct2D(const FVector& u, const FVector& v)
 
 float UGeometryMathLibrary::OrientAngle2D(const FVector& A, const FVector& B, const FVector& C)
 {
-    FVector BA = A - B;
-    FVector BC = C - B;
-    return CrossProduct2D(BA, BC);
+    FVector AB = B - A;
+    FVector AC = C - A;
+    return CrossProduct2D(AB, AC);
 }
 
 float UGeometryMathLibrary::GetAngle(const FVector& v, const FVector& u)
