@@ -137,6 +137,13 @@ private:
 	 * sans la modifier et écrit un rapport dans LogMaths_T1 (Output Log).
 	 */
 	void LogTriangulationReport(const TCHAR* Stage) const;
+
+	/**
+	 * Nombre de pointeurs que FlipEdgesToDelaunay suivrait et qui ne sont pas dans leur
+	 * tableau (Edge.V1/V2, Edge.LeftFace/RightFace, Face.Vertices). S'il y en a, le flip
+	 * lirait de la mémoire libérée : on ne l'appelle pas.
+	 */
+	int32 CountUnsafePointersForFlip() const;
 	int32 FindVertexId(const FVector& P) const;
 	bool IsLayerOn(const FString& Name) const;
 	void NotifyPoints();

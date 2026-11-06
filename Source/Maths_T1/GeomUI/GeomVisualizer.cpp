@@ -251,9 +251,17 @@ void AGeomVisualizer::Recompute()
 		UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de IncrementalTriangulation2D sur %d points"), Points.Num());
 		UDelaunayTriangulation::IncrementalTriangulation2D(Points, Vertices, Edges, Faces);
 		LogTriangulationReport(TEXT("après IncrementalTriangulation2D"));
-		UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de FlipEdgesToDelaunay"));
-		UDelaunayTriangulation::FlipEdgesToDelaunay(Edges, Faces);
-		LogTriangulationReport(TEXT("après FlipEdgesToDelaunay"));
+		if (const int32 Unsafe = CountUnsafePointersForFlip())
+		{
+			// Protection de la scène de test : le flip suivrait ces pointeurs et planterait
+			UE_LOG(LogMaths_T1, Warning, TEXT("[Triangulation] FlipEdgesToDelaunay NON appelé : %d pointeur(s) invalide(s) dans la triangulation, il planterait."), Unsafe);
+		}
+		else
+		{
+			UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de FlipEdgesToDelaunay"));
+			UDelaunayTriangulation::FlipEdgesToDelaunay(Edges, Faces);
+			LogTriangulationReport(TEXT("après FlipEdgesToDelaunay"));
+		}
 		bHasTriangulation = true;
 		break;
 
@@ -427,6 +435,32 @@ void AGeomVisualizer::LogTriangulationReport(const TCHAR* Stage) const
 	Line(FString::Printf(TEXT("Arêtes : %d sommet(s) invalide(s), %d en double | faces : %d sans face, %d avec une face, %d avec deux | LeftFace %d, RightFace %d, dont %d pointeur(s) hors du tableau Faces"),
 		BadEdgeVertex, DuplicateEdges, NoFace, OneFace, TwoFaces, LeftSet, RightSet, BadFacePointer));
 	Line(FString::Printf(TEXT("Delaunay : %d triangle(s) dont le cercle circonscrit contient un autre point"), NotDelaunay));
+}
+
+int32 AGeomVisualizer::CountUnsafePointersForFlip() const
+{
+	auto InArray = [](const void* Ptr, const void* Begin, int32 Count, SIZE_T Stride)
+	{
+		const uint8* P = static_cast<const uint8*>(Ptr);
+		const uint8* B = static_cast<const uint8*>(Begin);
+		return P && B && Count > 0 && P >= B && P < B + Count * Stride && (P - B) % Stride == 0;
+	};
+	int32 Unsafe = 0;
+	for (const FGeomEdge& E : Edges)
+	{
+		if (!InArray(E.V1, Vertices.GetData(), Vertices.Num(), sizeof(FGeomVertex))) ++Unsafe;
+		if (!InArray(E.V2, Vertices.GetData(), Vertices.Num(), sizeof(FGeomVertex))) ++Unsafe;
+		if (E.LeftFace && !InArray(E.LeftFace, Faces.GetData(), Faces.Num(), sizeof(FGeomFace))) ++Unsafe;
+		if (E.RightFace && !InArray(E.RightFace, Faces.GetData(), Faces.Num(), sizeof(FGeomFace))) ++Unsafe;
+	}
+	for (const FGeomFace& F : Faces)
+	{
+		for (int32 k = 0; k < 3; ++k)
+		{
+			if (!InArray(F.Vertices[k], Vertices.GetData(), Vertices.Num(), sizeof(FGeomVertex))) ++Unsafe;
+		}
+	}
+	return Unsafe;
 }
 
 void AGeomVisualizer::ExtractTriangulation()
