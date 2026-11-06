@@ -13,7 +13,12 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
     OutFaces.Empty();
 
     if (InputPoints.Num() < 3) return;
-
+	
+	const int32 N = InputPoints.Num();
+	OutVertices.Reserve(N);
+	OutEdges.Reserve(3 * N);
+	OutFaces.Reserve(2 * N);
+	
     // --- Étape 1 : Trier les points par abscisse croissante (et ordonnée en cas d'égalité) [Cours 4] ---
     TArray<FVector> SortedPoints = InputPoints;
     SortedPoints.Sort([](const FVector& A, const FVector& B) {
@@ -87,7 +92,7 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
         {
             if (!VEdge) continue;
 
-        	FGeomEdge* NewEdgePt1 = GetOrCreateEdge(OutEdges, VEdge->V1, NewVertex);
+        	FGeomEdge* NewEdgePt1 = GetOrNullEdge(OutEdges, VEdge->V1, NewVertex, true);
         	if (NewEdgePt1 == nullptr)
         	{
         		FGeomEdge NewEdge1;
@@ -95,10 +100,10 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
         		NewEdge1.V1 = VEdge->V1;
         		NewEdge1.V2 = NewVertex;
         		OutEdges.Add(NewEdge1);
-        		NewEdgePt1 = &NewEdge1;
+        		NewEdgePt1 = &OutEdges.Last();
         	}
         	
-        	FGeomEdge* NewEdgePt2 = GetOrCreateEdge(OutEdges, NewVertex, VEdge->V2);
+        	FGeomEdge* NewEdgePt2 = GetOrNullEdge(OutEdges, NewVertex, VEdge->V2, true);
         	if (NewEdgePt2 == nullptr)
         	{
         		FGeomEdge NewEdge2;
@@ -106,7 +111,7 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
         		NewEdge2.V1 = NewVertex;
         		NewEdge2.V2 = VEdge->V2;
         		OutEdges.Add(NewEdge2);
-        		NewEdgePt2 = &NewEdge2;
+        		NewEdgePt2 = &OutEdges.Last();
         	}
 
             // Créer un nouveau triangle [VEdge->V1, NewVertex, VEdge->V2]
@@ -119,9 +124,10 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
         	NewFace.Edges[1] = NewEdgePt1;
         	NewFace.Edges[2] = NewEdgePt2;
             OutFaces.Add(NewFace);
-        	VEdge->LeftFace = &NewFace;
-        	NewEdgePt1->LeftFace = &NewFace;
-        	NewEdgePt2->LeftFace = &NewFace;
+        	FGeomFace* Face = &OutFaces.Last();
+        	VEdge->RightFace = Face;
+        	NewEdgePt1->LeftFace = Face;
+        	NewEdgePt2->LeftFace = Face;
         }
     }
 }
@@ -141,34 +147,72 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 				continue;
 			}
 
-			FGeomFace* Face1 = Edge.LeftFace;
-			FGeomFace* Face2 = Edge.RightFace;
+			// On se représente le edge traité comme allant de bas en haut
+			
+			FGeomFace* LeftFace = Edge.LeftFace;
+			FGeomFace* RightFace = Edge.RightFace;
 
-			FGeomVertex* V1 = Edge.V1;
-			FGeomVertex* V2 = Edge.V2;
-			FGeomVertex* Opp1 = nullptr;
-			FGeomVertex* Opp2 = nullptr;
+			FGeomVertex* V1Bottom = Edge.V1;
+			FGeomVertex* V2Top = Edge.V2;
+			FGeomVertex* OppLeft = nullptr;
+			FGeomVertex* OppRight = nullptr;
 
 			for (int i = 0; i < 3; ++i)
 			{
-				if (Face1->Vertices[i] != V1 && Face1->Vertices[i] != V2)
+				if (LeftFace->Vertices[i] != V1Bottom && LeftFace->Vertices[i] != V2Top)
 				{
-					Opp1 = Face1->Vertices[i];
+					OppLeft = LeftFace->Vertices[i];
 				}
-				if (Face2->Vertices[i] != V1 && Face2->Vertices[i] != V2)
+				if (RightFace->Vertices[i] != V1Bottom && RightFace->Vertices[i] != V2Top)
 				{
-					Opp2 = Face2->Vertices[i];
+					OppRight = RightFace->Vertices[i];
 				}
 			}
 
-			if (!Opp1 || !Opp2) continue;
+			if (!OppLeft || !OppRight) continue;
 
 			// Test du critère de Delaunay
-			if (UGeometryMathLibrary::IsInsideCircumcircle(V1->Position, V2->Position, Opp1->Position, Opp2->Position))
+			if (UGeometryMathLibrary::IsInsideCircumcircle(V1Bottom->Position, V2Top->Position, OppLeft->Position, OppRight->Position))
 			{
+				// On récupère les 4 arrêtes extérieure du quadrilatère
+				FGeomEdge* TopLeftEdge = GetOrNullEdge(Edges, V2Top, OppLeft, false);
+				FGeomEdge* TopRightEdge = GetOrNullEdge(Edges, V2Top, OppRight, false);
+				FGeomEdge* BottomLeftEdge = GetOrNullEdge(Edges, V1Bottom, OppLeft, false);
+				FGeomEdge* BottomRightEdge = GetOrNullEdge(Edges, V1Bottom, OppRight, false);
+
+				// On crée les deux nouvelles faces
+				FGeomFace NewFaceTop;
+				//NewFaceTop.ID = OutFaces.Num();
+				NewFaceTop.Vertices[0] = OppRight;
+				NewFaceTop.Vertices[1] = V2Top;
+				NewFaceTop.Vertices[2] = OppLeft;
+				NewFaceTop.Edges[0] = TopRightEdge;
+				NewFaceTop.Edges[1] = TopLeftEdge;
+				NewFaceTop.Edges[2] = &Edge;
+				//OutFaces.Add(NewFaceTop);
+
+				FGeomFace NewFaceBottom;
+				//NewFaceBottom.ID = OutFaces.Num();
+				NewFaceBottom.Vertices[0] = OppLeft;
+				NewFaceBottom.Vertices[1] = V1Bottom;
+				NewFaceBottom.Vertices[2] = OppRight;
+				NewFaceBottom.Edges[0] = BottomLeftEdge;
+				NewFaceBottom.Edges[1] = BottomRightEdge;
+				NewFaceBottom.Edges[2] = &Edge;
+				//OutFaces.Add(NewFaceBottom);
+
+				if (TopLeftEdge->LeftFace == LeftFace)
+				{
+					TopLeftEdge->LeftFace = &NewFaceTop;
+				}
+				else if (TopLeftEdge->RightFace == RightFace)
+				{
+					TopLeftEdge->RightFace = &NewFaceTop;
+				}
+				
 				// on flip l'arête [V1, V2] (devient [Opp1, Opp2])
-				Edge.V1 = Opp1;
-				Edge.V2 = Opp2;
+				Edge.V1 = OppLeft;
+				Edge.V2 = OppRight;
 
 				// TODO : Mise à jour de la topologie des faces adjacentes
 				// (Le quadrilatère [V1, Opp1, V2, Opp2] est réorganisé)
@@ -197,10 +241,11 @@ void UDelaunayTriangulation::DelaunayKernel_RemovePoint(
 	// TODO :
 }
 
-FGeomEdge* UDelaunayTriangulation::GetOrCreateEdge(
+FGeomEdge* UDelaunayTriangulation::GetOrNullEdge(
 	TArray<FGeomEdge>& Edges, 
-	FGeomVertex* V1, 
-	FGeomVertex* V2)
+	FGeomVertex* V1,
+	FGeomVertex* V2,
+	bool canModify)
 {
 	for (FGeomEdge& Edge : Edges)
 	{
@@ -210,12 +255,15 @@ FGeomEdge* UDelaunayTriangulation::GetOrCreateEdge(
 		}
 		else if (Edge.V1 == V2 && Edge.V2 == V1)
 		{
-			FGeomVertex* tempVertex = Edge.V1;
-			Edge.V1 = Edge.V2;
-			Edge.V2 = tempVertex;
-			FGeomFace* tempFace = Edge.LeftFace;
-			Edge.LeftFace = Edge.RightFace;
-			Edge.RightFace = tempFace;
+			if (canModify)
+			{
+				FGeomVertex* tempVertex = Edge.V1;
+				Edge.V1 = Edge.V2;
+				Edge.V2 = tempVertex;
+				FGeomFace* tempFace = Edge.LeftFace;
+				Edge.LeftFace = Edge.RightFace;
+				Edge.RightFace = tempFace;
+			}
 			return &Edge;
 		}
 	}

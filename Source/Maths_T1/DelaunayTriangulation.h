@@ -27,5 +27,5 @@ public:
 
 	// Existence d'un Edge
 private:
-	static FGeomEdge* GetOrCreateEdge(TArray<FGeomEdge>& Edges, FGeomVertex* V1, FGeomVertex* V2);
+	static FGeomEdge* GetOrNullEdge(TArray<FGeomEdge>& Edges, FGeomVertex* V1, FGeomVertex* V2, bool canModify);
 };
