@@ -59,7 +59,12 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
             OutEdges.Add(Edge);
         }
     }
-
+	
+	if (k < SortedPoints.Num() && UGeometryMathLibrary::OrientAngle2D(SortedPoints[0], SortedPoints[1], SortedPoints[k]) > 0.0f)
+	{
+		for (FGeomEdge& Edge : OutEdges) { FGeomVertex* T = Edge.V1; Edge.V1 = Edge.V2; Edge.V2 = T; }
+	}
+	
     // --- Étape 3 : Boucle incrémentale pour chaque point P_q+1 [Cours 4] ---
     for (int32 q = k; q < SortedPoints.Num(); q++)
     {
@@ -129,6 +134,15 @@ void UDelaunayTriangulation::IncrementalTriangulation2D(
         	NewEdgePt1->LeftFace = Face;
         	NewEdgePt2->LeftFace = Face;
         }
+    	if (q == k)
+    	{
+    		for (int32 c = 0; c < k - 1; ++c)
+    		{
+    			FGeomEdge& Edge = OutEdges[c];
+    			FGeomVertex* T = Edge.V1; Edge.V1 = Edge.V2; Edge.V2 = T;
+    			FGeomFace* F = Edge.LeftFace; Edge.LeftFace = Edge.RightFace; Edge.RightFace = F;
+    		}
+    	}
     }
 }
 
@@ -180,16 +194,20 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 				FGeomEdge* BottomLeftEdge = GetOrNullEdge(Edges, V1Bottom, OppLeft, false);
 				FGeomEdge* BottomRightEdge = GetOrNullEdge(Edges, V1Bottom, OppRight, false);
 
+				Faces.RemoveAt(LeftFace->ID);
+				Faces.RemoveAt(RightFace->ID);
+				
 				// On crée les deux nouvelles faces
 				FGeomFace NewFaceTop;
-				//NewFaceTop.ID = OutFaces.Num();
+				NewFaceTop.ID = Faces.Num();
 				NewFaceTop.Vertices[0] = OppRight;
 				NewFaceTop.Vertices[1] = V2Top;
 				NewFaceTop.Vertices[2] = OppLeft;
 				NewFaceTop.Edges[0] = TopRightEdge;
 				NewFaceTop.Edges[1] = TopLeftEdge;
 				NewFaceTop.Edges[2] = &Edge;
-				//OutFaces.Add(NewFaceTop);
+				Faces.Add(NewFaceTop);
+				FGeomFace* NewFaceTopPt = &Faces.Last();
 
 				FGeomFace NewFaceBottom;
 				//NewFaceBottom.ID = OutFaces.Num();
@@ -201,6 +219,7 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 				NewFaceBottom.Edges[2] = &Edge;
 				//OutFaces.Add(NewFaceBottom);
 
+				// On arrange les faces pointées par les arrêtes
 				if (TopLeftEdge->LeftFace == LeftFace)
 				{
 					TopLeftEdge->LeftFace = &NewFaceTop;
