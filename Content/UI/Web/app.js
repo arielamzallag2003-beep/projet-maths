@@ -556,7 +556,14 @@ function openTab(id) {
   savePrefs();
 }
 document.querySelectorAll('[role=tab]').forEach((t) => (t.onclick = () => openTab(t.id)));
-$('verdict').onclick = () => openTab('t-check');
+// « Détails » : ouvre les vérifications et amène au premier test en échec (ou au premier test)
+$('verdict').onclick = () => {
+  openTab('t-check');
+  const target = document.querySelector('#checks li.ko') || document.querySelector('#checks li');
+  if (!target) return;
+  target.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); // relance l'animation
+};
 $('hide').onclick = () => G('togglepanel');
 $('runBattery').onclick = () => runBattery([state.algo]);
 $('runAll').onclick = () => runBattery(ALGOS);

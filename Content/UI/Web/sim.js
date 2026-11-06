@@ -38,7 +38,7 @@
     /* ---- « C++ » simulé ---- */
     function compute() {
       const P = Geo.unique(S.points), n = S.points.length, t0 = performance.now();
-      const res = { algo: S.algo, call: '', ms: 0, n, seq: ++S.seq, firstId: S.points.length ? S.points[0].id : 0, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : S.algo === 'voronoi' ? 'voronoi' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0 } };
+      const res = { algo: S.algo, call: '', ms: 0, n, seq: ++S.seq, firstId: S.points.length ? S.points[0].id : 0, kind: S.algo === 'jarvis' || S.algo === 'graham' ? 'hull' : S.algo === 'voronoi' ? 'voronoi' : 'tri', kernel: S.kernel, hull: [], tris: [], edges: [], counts: { vertices: 0, edges: 0, faces: 0, invalidFaces: 0, invalidEdges: 0, invalidLinks: 0 } };
       res.call = { jarvis: 'ComputeJarvisMarch', graham: 'ComputeGrahamScan', incr: 'IncrementalTriangulation2D', delaunay: 'IncrementalTriangulation2D + FlipEdgesToDelaunay', voronoi: 'ComputeVoronoiHalfPlanes' }[S.algo];
       if (P.length >= 3 && !stub) {
         if (res.kind === 'hull') res.hull = Geo.hull(P).map((p) => [p.x, p.y]);
@@ -54,13 +54,13 @@
             const onBox = Math.abs(v.x - B.minX) <= 0.01 || Math.abs(v.x - B.maxX) <= 0.01 || Math.abs(v.y - B.minY) <= 0.01 || Math.abs(v.y - B.maxY) <= 0.01;
             if (!onBox && !vs.some((w) => Math.hypot(v.x - w.x, v.y - w.y) <= 0.01)) vs.push(v);
           }
-          res.counts = { vertices: vs.length, edges: edges.length, faces: cells.length, invalidFaces: 0, invalidEdges: 0 };
+          res.counts = { vertices: vs.length, edges: edges.length, faces: cells.length, invalidFaces: 0, invalidEdges: 0, invalidLinks: 0 };
           S.vertices = vs;
         } else {
           const tris = S.algo === 'delaunay' ? Geo.delaunay(P).tris : Geo.triangulate(P);
           res.tris = tris.map((t) => [t[0].x, t[0].y, t[1].x, t[1].y, t[2].x, t[2].y]);
           const b = Geo.hullWithBoundary(P).length;
-          res.counts = { vertices: P.length, edges: tris.length ? (3 * tris.length + b) / 2 : 0, faces: tris.length, invalidFaces: 0, invalidEdges: 0 };
+          res.counts = { vertices: P.length, edges: tris.length ? (3 * tris.length + b) / 2 : 0, faces: tris.length, invalidFaces: 0, invalidEdges: 0, invalidLinks: 0 };
         }
       }
       res.ms = n >= 3 ? performance.now() - t0 : 0;

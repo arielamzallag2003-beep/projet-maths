@@ -105,6 +105,20 @@ const Geo = (() => {
     return bad;
   }
 
+  // Triangles dont le cercle circonscrit contient strictement un autre point (test complet,
+  // contrairement à nonDelaunayEdges qui ne regarde que les arêtes partagées par deux triangles)
+  function nonEmptyCircles(tris, points) {
+    let bad = 0;
+    for (const t of tris) {
+      const c = circumcircle(t[0], t[1], t[2]);
+      if (!c) continue;
+      const r2 = c.r * c.r, tol = 1e-9 * r2 + 1e-6;
+      const own = (p) => t.some((q) => q.x === p.x && q.y === p.y);
+      if (points.some((p) => !own(p) && (p.x - c.x) ** 2 + (p.y - c.y) ** 2 < r2 - tol)) bad++;
+    }
+    return bad;
+  }
+
   // Quatre points cocycliques ou plus : la triangulation de Delaunay n'est pas unique
   function hasCocircular(tris) {
     for (const pair of edgeMap(tris).values()) {
@@ -263,7 +277,7 @@ const Geo = (() => {
   // Positions distinctes (les doublons exacts ne comptent qu'une fois)
   function unique(P) { const seen = new Set(); return P.filter((p) => { const k = pk(p); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
-  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key, voronoiBounds, voronoiCells, voronoiEdgesOf, voronoiCellSteps };
+  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, nonEmptyCircles, hasCocircular, voronoiSegments, circleSegments, key, voronoiBounds, voronoiCells, voronoiEdgesOf, voronoiCellSteps };
 })();
 
 /* ---------- Vérifications d'un résultat renvoyé par le C++ ---------- */
@@ -304,9 +318,12 @@ function runChecks(res, rawPoints, refDelaunay) {
     const T = res.tris, c = res.counts || {};
     add(T.length > 0 || collinear, 'La fonction renvoie des faces', `${T.length} face${T.length > 1 ? 's' : ''}`,
         T.length === 0 ? (c.edges ? 'Des arêtes mais aucune face lisible.' : 'Aucune face : la fonction est sans doute encore à écrire.') : '');
-    const invalid = (c.invalidFaces || 0) + (c.invalidEdges || 0);
+    // Tous les pointeurs du graphe : face -> sommet, arête -> sommet, face -> arête, arête -> face
+    const badVertex = (c.invalidFaces || 0) + (c.invalidEdges || 0), badLink = c.invalidLinks || 0, invalid = badVertex + badLink;
     if (c.faces || c.edges) add(invalid === 0, 'Pointeurs du graphe d\'incidence valides', invalid === 0 ? 'oui' : `${invalid} invalide${invalid > 1 ? 's' : ''}`,
-        invalid ? 'Un pointeur sort du tableau Vertices : attention aux TArray qui se réallouent pendant un Add.' : '');
+        invalid === 0 ? 'Sommets, arêtes et faces : chaque pointeur désigne un élément de son tableau.'
+          : [badVertex ? `${badVertex} vers un sommet hors de Vertices` : '', badLink ? `${badLink} vers une arête ou une face hors de son tableau` : ''].filter(Boolean).join(', ')
+            + '. Souvent : adresse d\'une variable temporaire, ou pointeur gardé avant un Add qui a réalloué le tableau.');
     if (T.length) {
       const degenerate = T.filter(t => Geo.triArea(t) < 1e-6).length;
       add(degenerate === 0, 'Aucun triangle plat', degenerate === 0 ? 'oui' : `${degenerate} plat${degenerate > 1 ? 's' : ''}`, '');
@@ -317,8 +334,10 @@ function runChecks(res, rawPoints, refDelaunay) {
           ratio > 1 + 1e-6 ? 'Plus de 100 % : des triangles se chevauchent.' : ratio < 1 - 1e-6 ? 'Moins de 100 % : il manque des triangles.' : '');
       if (c.edges) { const E = (3 * T.length + b) / 2; add(c.edges === E, 'Nombre d\'arêtes : (3T + b) / 2', `${c.edges} / ${E}`, ''); }
       if (res.algo === 'delaunay') {
-        const bad = Geo.nonDelaunayEdges(T);
-        add(bad === 0, 'Critère de Delaunay (cercles vides)', bad === 0 ? 'respecté' : `${bad} arête${bad > 1 ? 's' : ''}`, '');
+        // Test complet : aucun point strictement dans le cercle circonscrit d'un triangle
+        const bad = Geo.nonEmptyCircles(T, points);
+        add(bad === 0, 'Critère de Delaunay (cercles vides)', bad === 0 ? 'respecté' : `${bad} triangle${bad > 1 ? 's' : ''}`,
+            bad ? 'Un autre point est dans le cercle circonscrit de ces triangles.' : '');
         if (!Geo.hasCocircular(T)) {
           const ref = refDelaunay ? refDelaunay() : Geo.delaunay(points).tris, kk = t => t.map(p => p.x + ',' + p.y).sort().join(' ');
           const set = new Set(ref.map(kk)), same = T.length === ref.length && T.every(t => set.has(kk(t)));

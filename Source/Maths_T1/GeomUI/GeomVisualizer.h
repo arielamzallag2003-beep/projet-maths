@@ -123,6 +123,8 @@ private:
 	TArray<TPair<FVector, FVector>> ResultEdges;
 	int32 InvalidFaces = 0;
 	int32 InvalidEdges = 0;
+	/** Pointeurs Face.Edges[k], Edge.LeftFace / RightFace non nuls qui sortent de leur tableau. */
+	int32 InvalidLinks = 0;
 	double LastMs = 0.0;
 	FString LastCall;
 	int32 ResultSeq = 0;
