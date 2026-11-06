@@ -12,6 +12,8 @@
 
 const $ = (id) => document.getElementById(id);
 const ALGOS = ['jarvis', 'graham', 'incr', 'delaunay', 'voronoi'];
+// Pas encore terminés : masqués et verrouillés en mode présentation (voir data-wip dans index.html)
+const WIP = ['incr', 'delaunay'];
 const CALLS = {
   jarvis: 'ComputeJarvisMarch',
   graham: 'ComputeGrahamScan',
@@ -35,7 +37,9 @@ const state = {
   layers: { hull: true, edges: true, labels: true, grid: true },
   seeded: false, bench: null,
   build: { on: false, info: null, timer: 0 },
+  presentation: false,
 };
+const allowed = (id) => !(state.presentation && WIP.includes(id));
 
 /* ---------- Appels vers le C++ : jamais d'exception qui casse la page ---------- */
 function G(fn, ...args) {
@@ -60,6 +64,7 @@ function savePrefs() {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       algo: state.algo, layers: state.layers, overlays: state.overlays,
       tab: document.querySelector('[role=tab][aria-selected=true]')?.id, seed: +$('seed').value, count: +$('count').value,
+      presentation: state.presentation,
     }));
   } catch (_) { /* rien */ }
 }
@@ -125,7 +130,7 @@ function showAlgo(id) {
     ? 'Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.'
     : 'Disponible avec Delaunay uniquement.';
 }
-function selectAlgo(id) { if (state.bench) return; if (id !== 'voronoi' && state.build.on) setBuild(false); showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
+function selectAlgo(id) { if (state.bench) return; if (!allowed(id)) { note(`${CALLS[id]} : pas encore terminé, masqué en mode présentation`); return; } if (id !== 'voronoi' && state.build.on) setBuild(false); showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
 function showTool(t) { state.tool = t; document.querySelectorAll('.tools .btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t))); }
 function selectTool(t) { showTool(t); G('settool', t); }
 
@@ -304,6 +309,7 @@ function renderHover() {
 
 /* ---------- Rappels venant du C++ (ou de la simulation) ---------- */
 window.onGeomState = (s) => {
+  if (s.algo && !allowed(s.algo)) { selectAlgo('jarvis'); s = { ...s, algo: null }; }
   if (s.algo && !state.bench) showAlgo(s.algo);
   if (s.tool) showTool(s.tool);
   $('kernel').checked = !!s.kernel; state.kernel = !!s.kernel;
@@ -566,7 +572,7 @@ $('verdict').onclick = () => {
 };
 $('hide').onclick = () => G('togglepanel');
 $('runBattery').onclick = () => runBattery([state.algo]);
-$('runAll').onclick = () => runBattery(ALGOS);
+$('runAll').onclick = () => runBattery(ALGOS.filter(allowed));
 $('runCurve').onclick = runCurve;
 $('buildOn').onchange = (e) => setBuild(e.target.checked);
 $('bFirst').onclick = () => { stopPlay(); sendBuild(true, 0); };
@@ -597,7 +603,23 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'f') G('frameall');
   else if (k === 'r') $('rerun').click();
   else if (k === 'h') G('togglepanel');
+  else if (k === 'p') setPresentation(!state.presentation);
 });
+
+/* ---------- Mode présentation ---------- */
+function setPresentation(on) {
+  state.presentation = !!on;
+  $('panel').classList.toggle('presenting', state.presentation);
+  $('present').setAttribute('aria-pressed', String(state.presentation));
+  if (state.presentation) {
+    if (WIP.includes(state.algo)) selectAlgo('jarvis');
+    if (state.kernel) { state.kernel = false; $('kernel').checked = false; G('setkernelmode', false); }
+    if (state.overlays.voronoi) { state.overlays.voronoi = false; document.querySelector('[data-overlay=voronoi]').checked = false; pushOverlays(); }
+  }
+  note(state.presentation ? 'Mode présentation : seules les parties terminées sont affichées' : 'Mode présentation désactivé');
+  savePrefs();
+}
+$('present').onclick = () => setPresentation(!state.presentation);
 
 /* ---------- Démarrage ---------- */
 function boot(geom, isUE) {
@@ -618,8 +640,10 @@ function boot(geom, isUE) {
   document.querySelectorAll('[data-layer]').forEach((c) => (c.checked = !!state.layers[c.dataset.layer]));
   document.querySelectorAll('[data-overlay]').forEach((c) => (c.checked = !!state.overlays[c.dataset.overlay]));
   if (prefs.tab) openTab(prefs.tab);
+  state.presentation = !!prefs.presentation || new URLSearchParams(location.search).has('presentation');
+  $('panel').classList.toggle('presenting', state.presentation); $('present').setAttribute('aria-pressed', String(state.presentation));
 
-  showAlgo(ALGOS.includes(prefs.algo) ? prefs.algo : state.algo); showTool(state.tool); render();
+  showAlgo(ALGOS.includes(prefs.algo) && allowed(prefs.algo) ? prefs.algo : 'jarvis'); showTool(state.tool); render();
   // Réglages envoyés AVANT ready() : l'état que le C++ renvoie à ready() est alors déjà le bon
   G('setalgorithm', state.algo);
   Object.entries(state.layers).forEach(([name, on]) => G('setlayer', name, on));

@@ -26,6 +26,7 @@
     <symbol id="i-rerun" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></symbol>
     <symbol id="i-dice" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="15" r="1.2" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-present" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/><path d="m10 8 4 2-4 2z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
   </defs>
 </svg>
@@ -40,6 +41,7 @@
     <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
     <div class="brand"><b>Géométrie</b><small>Maths_T1 · scène de test</small></div>
     <span class="pill" id="bridge">connexion…</span>
+    <button class="icon" id="present" aria-pressed="false" title="Mode présentation (P) : masque ce qui n'est pas encore terminé" aria-label="Mode présentation"><svg><use href="#i-present"/></svg></button>
     <button class="icon" id="hide" title="Masquer le panneau (H)" aria-label="Masquer le panneau"><svg><use href="#i-back"/></svg></button>
   </header>
 
@@ -51,7 +53,7 @@
         <button data-algo="graham" aria-pressed="false" title="ComputeGrahamScan · touche 2"><svg><use href="#i-graham"/></svg><strong>Graham</strong><kbd>2</kbd></button>
       </div>
     </div>
-    <div class="row" title="Triangulation, cours 4">
+    <div class="row" data-wip title="Triangulation, cours 4">
       <span class="group">Triangulation</span>
       <div class="seg" style="--c: var(--tri)">
         <button data-algo="incr" aria-pressed="false" title="IncrementalTriangulation2D · touche 3"><svg><use href="#i-incr"/></svg><strong>Incrémentale</strong><kbd>3</kbd></button>
@@ -165,7 +167,7 @@
         </div>
       </details>
 
-      <div class="list">
+      <div class="list" data-wip>
         <label class="toggle" style="--sw: var(--circle)">
           <input type="checkbox" id="kernel">
           <span>Mode noyau de Delaunay<small id="kernelHint">Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.</small></span>
@@ -190,7 +192,7 @@
           <label class="toggle" style="--sw: var(--bad)"><i></i><span>Différences avec la référence<small>Rouge : attendu mais absent. Violet : en trop.</small></span><input type="checkbox" data-overlay="diff"></label>
           <label class="toggle" style="--sw: #7a8597"><i></i><span>Référence JS<small>Résultat attendu, en gris.</small></span><input type="checkbox" data-overlay="reference"></label>
           <label class="toggle" style="--sw: var(--circle)"><i></i><span>Cercles circonscrits<small>Des triangles renvoyés par le C++ (avec Voronoï : de la triangulation de Delaunay JS).</small></span><input type="checkbox" data-overlay="circles"></label>
-          <label class="toggle" style="--sw: var(--voronoi)"><i></i><span>Diagramme de Voronoï<small>Dual de la triangulation renvoyée.</small></span><input type="checkbox" data-overlay="voronoi"></label>
+          <label class="toggle" data-wip style="--sw: var(--voronoi)"><i></i><span>Diagramme de Voronoï<small>Dual de la triangulation renvoyée.</small></span><input type="checkbox" data-overlay="voronoi"></label>
           <label class="toggle" style="--sw: var(--tri)"><i></i><span>Triangulation duale<small>Avec Voronoï : Delaunay JS, pour voir la dualité (cours 5).</small></span><input type="checkbox" data-overlay="dual"></label>
         </div>
       </div>
@@ -263,10 +265,12 @@
       <div class="block">
         <h3>Partout</h3>
         <div class="keys">
-          <kbd>1 à 5</kbd><span>Jarvis · Graham · Incrémentale · Delaunay · Voronoï</span>
+          <kbd data-wip>1 à 5</kbd><span data-wip>Jarvis · Graham · Incrémentale · Delaunay · Voronoï</span>
+          <kbd data-present-only>1 · 2 · 5</kbd><span data-present-only>Jarvis · Graham · Voronoï</span>
           <kbd>A · M · X</kbd><span>Ajouter · déplacer · supprimer</span>
           <kbd>Ctrl Z · Ctrl Y</kbd><span>Annuler · rétablir</span>
           <kbd>R</kbd><span>Relancer l'appel</span>
+          <kbd>P</kbd><span>Mode présentation : masque ce qui n'est pas encore terminé</span>
         </div>
       </div>
       <p class="note">Les raccourcis vont à ce qui a le focus : cliquez dans le niveau pour lui rendre la main. Les réglages du panneau sont mémorisés d'une session à l'autre.</p>
