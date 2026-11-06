@@ -68,6 +68,28 @@ TArray<FVector> UConvexHullAlgorithms::ComputeGrahamScan(const TArray<FVector>& 
 	{
 		return Points;
 	}
+	// Points tous alignés : l'enveloppe se réduit aux deux extrémités.
+	// Sans ce cas, Orient vaut toujours 0 plus bas et la boucle ne s'arrête jamais.
+	{
+		int iMin = 0, iMax = 0;
+		for (int i = 1; i < Points.Num(); ++i)
+		{
+			if (Points[i].X < Points[iMin].X || (Points[i].X == Points[iMin].X && Points[i].Y < Points[iMin].Y)) iMin = i;
+			if (Points[i].X > Points[iMax].X || (Points[i].X == Points[iMax].X && Points[i].Y > Points[iMax].Y)) iMax = i;
+		}
+		bool bAllCollinear = true;
+		for (const FVector& Pt : Points)
+		{
+			if (OrientAngle2D(Points[iMin], Points[iMax], Pt) != 0.0f) { bAllCollinear = false; break; }
+		}
+		if (bAllCollinear)
+		{
+			if (Points[iMin] != Points[iMax]) { ConvexHull.Add(Points[iMin]); ConvexHull.Add(Points[iMax]); }
+			else { ConvexHull.Add(Points[iMin]); }
+			return ConvexHull;
+		}
+	}
+
 	// Calcul du Barycentre
     FVector B = FVector::ZeroVector;
     for (const FVector& Pt : Points)
