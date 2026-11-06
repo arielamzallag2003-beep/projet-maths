@@ -194,74 +194,34 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 				FGeomEdge* BottomLeftEdge = GetOrNullEdge(Edges, V1Bottom, OppLeft, false);
 				FGeomEdge* BottomRightEdge = GetOrNullEdge(Edges, V1Bottom, OppRight, false);
 
-				Faces.RemoveAt(LeftFace->ID);
-				Faces.RemoveAt(RightFace->ID);
-				
-				// On crée les deux nouvelles faces
-				FGeomFace NewFaceTop;
-				NewFaceTop.ID = Faces.Num();
-				NewFaceTop.Vertices[0] = OppRight;
-				NewFaceTop.Vertices[1] = V2Top;
-				NewFaceTop.Vertices[2] = OppLeft;
-				NewFaceTop.Edges[0] = TopRightEdge;
-				NewFaceTop.Edges[1] = TopLeftEdge;
-				NewFaceTop.Edges[2] = &Edge;
-				Faces.Add(NewFaceTop);
-				FGeomFace* NewFaceTopPt = &Faces.Last();
+				if (!TopLeftEdge || !TopRightEdge || !BottomLeftEdge || !BottomRightEdge) continue;
 
-				FGeomFace NewFaceBottom;
-				NewFaceBottom.ID = Faces.Num();
-				NewFaceBottom.Vertices[0] = OppLeft;
-				NewFaceBottom.Vertices[1] = V1Bottom;
-				NewFaceBottom.Vertices[2] = OppRight;
-				NewFaceBottom.Edges[0] = BottomLeftEdge;
-				NewFaceBottom.Edges[1] = BottomRightEdge;
-				NewFaceBottom.Edges[2] = &Edge;
-				Faces.Add(NewFaceBottom);
-				FGeomFace* NewFaceBottomPt = &Faces.Last();
+				// On réécrit les deux faces sur place au lieu de les retirer du tableau :
+				// RemoveAt décalait les faces suivantes et tous les FGeomFace* des arêtes devenaient faux.
+				// LeftFace devient le triangle du haut, RightFace celui du bas.
+				LeftFace->Vertices[0] = OppRight;
+				LeftFace->Vertices[1] = V2Top;
+				LeftFace->Vertices[2] = OppLeft;
+				LeftFace->Edges[0] = TopRightEdge;
+				LeftFace->Edges[1] = TopLeftEdge;
+				LeftFace->Edges[2] = &Edge;
 
-				// On arrange les faces pointées par les arrêtes
-				if (TopLeftEdge->LeftFace == LeftFace)
-				{
-					TopLeftEdge->LeftFace = NewFaceTopPt;
-				}
-				else if (TopLeftEdge->RightFace == LeftFace)
-				{
-					TopLeftEdge->RightFace = NewFaceTopPt;
-				}
-				
-				if (TopRightEdge->LeftFace == RightFace)
-				{
-					TopRightEdge->LeftFace = NewFaceTopPt;
-				}
-				else if (TopRightEdge->RightFace == RightFace)
-				{
-					TopRightEdge->RightFace = NewFaceTopPt;
-				}
+				RightFace->Vertices[0] = OppLeft;
+				RightFace->Vertices[1] = V1Bottom;
+				RightFace->Vertices[2] = OppRight;
+				RightFace->Edges[0] = BottomLeftEdge;
+				RightFace->Edges[1] = BottomRightEdge;
+				RightFace->Edges[2] = &Edge;
 
-				if (BottomLeftEdge->LeftFace == LeftFace)
-				{
-					BottomLeftEdge->LeftFace = NewFaceBottomPt;
-				}
-				else if (BottomLeftEdge->RightFace == LeftFace)
-				{
-					BottomLeftEdge->RightFace = NewFaceBottomPt;
-				}
+				// Seules deux arêtes extérieures changent de face : TopRight passe en haut, BottomLeft en bas
+				if (TopRightEdge->LeftFace == RightFace) TopRightEdge->LeftFace = LeftFace;
+				else if (TopRightEdge->RightFace == RightFace) TopRightEdge->RightFace = LeftFace;
+				if (BottomLeftEdge->LeftFace == LeftFace) BottomLeftEdge->LeftFace = RightFace;
+				else if (BottomLeftEdge->RightFace == LeftFace) BottomLeftEdge->RightFace = RightFace;
 
-				if (BottomRightEdge->LeftFace == RightFace)
-				{
-					BottomRightEdge->LeftFace = NewFaceBottomPt;
-				}
-				else if (BottomRightEdge->RightFace == RightFace)
-				{
-					BottomRightEdge->RightFace = NewFaceBottomPt;
-				}
-				
-				// on flip l'arête [V1, V2] (devient [Opp1, Opp2])
+				// L'arête devient [OppLeft, OppRight] : le haut reste à sa gauche, le bas à sa droite
 				Edge.V1 = OppLeft;
 				Edge.V2 = OppRight;
-				Edge.LeftFace = NewFaceTopPt;
-				Edge.RightFace = NewFaceBottomPt;
 
 				bHasFlipped = true;
 				break;
