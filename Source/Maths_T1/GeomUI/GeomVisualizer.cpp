@@ -525,10 +525,10 @@ namespace GeomStyle
 {
 	using Gfx = FGeomCanvas;
 
-	/** Teinte par région : du cyan au rose (jamais de jaune ni d'olive, ternes sur fond sombre). */
+	/** Teinte sourde par région, du cyan au rose (jamais de jaune ni d'olive, ternes sur fond sombre). */
 	FLinearColor CellColor(int32 Index, float Alpha)
 	{
-		const double H = 150.0 + FMath::Fmod(Index * 137.508, 180.0), S = 0.5, V = 0.95;
+		const double H = 150.0 + FMath::Fmod(Index * 137.508, 180.0), S = 0.35, V = 0.9;
 		auto F = [&](double N)
 		{
 			const double K = FMath::Fmod(N + H / 60.0, 6.0);
@@ -558,7 +558,8 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 	const FLinearColor HullC = Gfx::Hex(TEXT("#FFB547")), TriC = Gfx::Hex(TEXT("#5FA8FF")), Violet = Gfx::Hex(TEXT("#C58BFF"));
 	const FLinearColor Red = Gfx::Hex(TEXT("#FF7A59")), Pink = Gfx::Hex(TEXT("#FF5D7A"));
 
-	Cv.Background(Gfx::Hex(TEXT("#0E141D")), Gfx::Hex(TEXT("#080B10")));
+	const FLinearColor Paper = Gfx::Hex(TEXT("#0D1117"));
+	Cv.Background(Paper, Paper); // fond uni, comme une feuille
 
 	// ---- Grille et axes
 	if (IsLayerOn(TEXT("grid")))
@@ -566,7 +567,7 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		const FVector2D W0 = Cv.ToWorld(FVector2D::ZeroVector), W1 = Cv.ToWorld(Screen);
 		const FVector2D Lo(FMath::Min(W0.X, W1.X), FMath::Min(W0.Y, W1.Y)), Hi(FMath::Max(W0.X, W1.X), FMath::Max(W0.Y, W1.Y));
 		struct FLevel { double Step; float Alpha; };
-		const FLevel Levels[] = { { 100.0, 0.035f }, { 500.0, 0.06f }, { 1000.0, 0.09f } };
+		const FLevel Levels[] = { { 100.0, 0.04f }, { 500.0, 0.07f }, { 1000.0, 0.1f } };
 		for (const FLevel& L : Levels)
 		{
 			if (L.Step * Cv.PixelsPerCm() < 8.0 || (Hi.X - Lo.X) / L.Step > 600.0) continue; // trop serré à ce zoom
@@ -583,8 +584,8 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			}
 		}
 		const FVector2D O = Cv.ToScreen(FVector2D::ZeroVector);
-		Cv.Line(O, FVector2D(Screen.X, O.Y), 1.2f * K, Gfx::Hex(TEXT("#FF5D5D"), 0.45f));
-		Cv.Line(O, FVector2D(O.X, 0.0), 1.2f * K, Gfx::Hex(TEXT("#6FDC95"), 0.45f));
+		Cv.Line(O, FVector2D(Screen.X, O.Y), 1.f * K, Gfx::Hex(TEXT("#FF5D5D"), 0.4f));
+		Cv.Line(O, FVector2D(O.X, 0.0), 1.f * K, Gfx::Hex(TEXT("#6FDC95"), 0.4f));
 	}
 
 	const int32 Focus = DragId != INDEX_NONE ? DragId : HoverId;
@@ -612,7 +613,7 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			}
 		}
 
-		// Régions : dégradé depuis le site
+		// Régions : aplat léger, une teinte par région
 		TArray<FVector2D> Poly;
 		for (int32 i = 0; i < VoronoiCells.Num(); ++i)
 		{
@@ -621,47 +622,26 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			Poly.Reset();
 			for (const FVector& V : Cell.Polygon) Poly.Add(S(V));
 			const bool bHot = i == HotCell, bNear = Near.Contains(i);
-			Cv.ConvexFill(Poly, S(Cell.Site), CellColor(i, (bHot ? 0.46f : bNear ? 0.34f : 0.26f) * Dim), CellColor(i, (bHot ? 0.18f : bNear ? 0.11f : 0.07f) * Dim));
+			Cv.ConvexFill(Poly, CellColor(i, (bHot ? 0.24f : bNear ? 0.16f : 0.1f) * Dim));
 		}
 
 		if (IsLayerOn(TEXT("edges")))
 		{
-			// Arêtes : halo puis trait. Celles qui touchent le cadre s'effacent (régions infinies).
-			const double Tol = 1e-6 * FMath::Max(VoronoiBoundsMax.X - VoronoiBoundsMin.X, VoronoiBoundsMax.Y - VoronoiBoundsMin.Y) + 0.02;
-			auto OnFrame = [&](const FVector& P)
-			{
-				return FMath::Abs(P.X - VoronoiBoundsMin.X) <= Tol || FMath::Abs(P.X - VoronoiBoundsMax.X) <= Tol
-					|| FMath::Abs(P.Y - VoronoiBoundsMin.Y) <= Tol || FMath::Abs(P.Y - VoronoiBoundsMax.Y) <= Tol;
-			};
+			// Arêtes : un trait net, jusqu'au cadre
 			for (const FVoronoiEdge& E : VoronoiEdges)
 			{
-				FVector A = E.A, B = E.B;
-				if (OnFrame(A) && !OnFrame(B)) Swap(A, B);
-				const FVector2D Sa = S(A), Sb = S(B);
-				if (OnFrame(B))
-				{
-					const FVector2D M = Sa + (Sb - Sa) * 0.55;
-					Cv.Line(Sa, M, 7.f * K, Gfx::WithAlpha(TealDeep, 0.10f * Dim));
-					Cv.Line(M, Sb, 7.f * K, Gfx::WithAlpha(TealDeep, 0.10f * Dim), Gfx::WithAlpha(TealDeep, 0.f));
-					Cv.Line(Sa, M, 1.6f * K, Gfx::WithAlpha(Teal, 0.95f * Dim));
-					Cv.Line(M, Sb, 1.6f * K, Gfx::WithAlpha(Teal, 0.95f * Dim), Gfx::WithAlpha(Teal, 0.f));
-				}
-				else
-				{
-					Cv.Line(Sa, Sb, 7.f * K, Gfx::WithAlpha(TealDeep, 0.10f * Dim));
-					Cv.Line(Sa, Sb, 1.6f * K, Gfx::WithAlpha(Teal, 0.95f * Dim));
-				}
+				Cv.Line(S(E.A), S(E.B), 1.4f * K, Gfx::WithAlpha(Teal, 0.9f * Dim));
 			}
 			// Cadre qui coupe les régions infinies, en pointillés
 			const FVector2D F0 = S(VoronoiBoundsMin), F2 = S(VoronoiBoundsMax), F1(F2.X, F0.Y), F3(F0.X, F2.Y);
-			const FLinearColor Frame(1.f, 1.f, 1.f, 0.16f);
+			const FLinearColor Frame(1.f, 1.f, 1.f, 0.14f);
 			Cv.DashedLine(F0, F1, 1.f * K, Frame, 6.f * K, 6.f * K);
 			Cv.DashedLine(F1, F2, 1.f * K, Frame, 6.f * K, 6.f * K);
 			Cv.DashedLine(F2, F3, 1.f * K, Frame, 6.f * K, 6.f * K);
 			Cv.DashedLine(F3, F0, 1.f * K, Frame, 6.f * K, 6.f * K);
 			for (const FVector& V : VoronoiVertices)
 			{
-				Cv.Disc(S(V), 2.f * K, Gfx::Hex(TEXT("#BFF3EE"), 0.7f * Dim));
+				Cv.Disc(S(V), 1.8f * K, Gfx::WithAlpha(Teal, 0.9f * Dim));
 			}
 		}
 
@@ -670,7 +650,7 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		{
 			Poly.Reset();
 			for (const FVector& V : VoronoiCells[HotCell].Polygon) Poly.Add(S(V));
-			Cv.Polyline(Poly, true, 2.4f * K, Gfx::WithAlpha(TealPale, 0.95f));
+			Cv.Polyline(Poly, true, 2.f * K, Gfx::WithAlpha(TealPale, 0.95f));
 			for (const int32 j : Near)
 			{
 				if (VoronoiCells.IsValidIndex(j))
@@ -749,14 +729,14 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		{
 			T.Reset();
 			for (const FVector& V : Tri) T.Add(S(V));
-			Cv.ConvexFill(T, Gfx::WithAlpha(TriC, 0.05f));
-			Cv.Polyline(T, true, 1.3f * K, Gfx::WithAlpha(TriC, 0.9f));
+			Cv.ConvexFill(T, Gfx::WithAlpha(TriC, 0.04f));
+			Cv.Polyline(T, true, 1.2f * K, Gfx::WithAlpha(TriC, 0.9f));
 		}
 		if (ResultTriangles.Num() == 0)
 		{
 			for (const TPair<FVector, FVector>& E : ResultEdges)
 			{
-				Cv.Line(S(E.Key), S(E.Value), 1.3f * K, Gfx::WithAlpha(TriC, 0.9f));
+				Cv.Line(S(E.Key), S(E.Value), 1.2f * K, Gfx::WithAlpha(TriC, 0.9f));
 			}
 		}
 	}
@@ -771,7 +751,7 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		}
 	}
 
-	// ---- Enveloppe convexe : voile, halo, trait
+	// ---- Enveloppe convexe : voile léger, trait
 	if (IsLayerOn(TEXT("hull")) && Hull.Num() > 1)
 	{
 		TArray<FVector2D> H;
@@ -780,12 +760,11 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		const int32 Count = H.Num() > 2 ? H.Num() : 1;
 		for (int32 i = 0; i < Count; ++i)
 		{
-			Cv.Line(H[i], H[(i + 1) % H.Num()], 8.f * K, Gfx::WithAlpha(HullC, 0.12f));
-			Cv.Line(H[i], H[(i + 1) % H.Num()], 2.4f * K, HullC);
+			Cv.Line(H[i], H[(i + 1) % H.Num()], 2.f * K, HullC);
 		}
 	}
 
-	// ---- Points : halo, contour sombre, corps
+	// ---- Points : disque plein, fin contour sombre
 	const int32 BuildNeighbor = bBuild && Points.IsValidIndex(Step->Neighbor) ? Step->Neighbor : INDEX_NONE;
 	for (int32 i = 0; i < Points.Num(); ++i)
 	{
@@ -793,11 +772,10 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 		if (P.X < -50.0 || P.Y < -50.0 || P.X > Screen.X + 50.0 || P.Y > Screen.Y + 50.0) continue;
 		const bool bOnHull = Hull.ContainsByPredicate([&](const FVector& Hv) { return FVector::DistSquared2D(Hv, Points[i]) < 1.0; });
 		const float A = !bBuild || i == ConstructionIndex || i == BuildNeighbor ? 1.f : 0.45f;
-		Cv.Disc(P, 8.f * K, bVoronoi ? CellColor(Canonical(i), 0.35f * A) : FLinearColor(1.f, 1.f, 1.f, 0.06f * A));
-		Cv.Disc(P, 5.8f * K, Gfx::WithAlpha(Shadow, A));
-		Cv.Disc(P, 4.2f * K, Gfx::WithAlpha(bOnHull ? HullC : White, A));
-		if (PointIds[i] == DragId) Cv.Ring(P, 11.f * K, 1.5f * K, Violet);
-		else if (PointIds[i] == HoverId) Cv.Ring(P, 11.f * K, 1.5f * K, FLinearColor(1.f, 1.f, 1.f, 0.9f));
+		Cv.Disc(P, 4.8f * K, Gfx::WithAlpha(Paper, A));
+		Cv.Disc(P, 3.6f * K, Gfx::WithAlpha(bOnHull ? HullC : White, A));
+		if (PointIds[i] == DragId) Cv.Ring(P, 9.f * K, 1.5f * K, Violet);
+		else if (PointIds[i] == HoverId) Cv.Ring(P, 9.f * K, 1.5f * K, FLinearColor(1.f, 1.f, 1.f, 0.9f));
 	}
 
 	// ---- Étiquettes : jamais l'une sur l'autre, le point survolé en premier

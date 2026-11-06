@@ -125,21 +125,11 @@
 
     /* ---- Dessin : mêmes formes, couleurs et tailles que AGeomVisualizer::Paint (C++) ---- */
     const hsv = (h, s, v) => { const f = (n) => { const k = (n + h / 60) % 6; return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255); }; return [f(5), f(3), f(1)]; };
-    const cellRgb = (i) => hsv(150 + ((i * 137.508) % 180), 0.5, 0.95); // du cyan au rose, sans jaune ni olive (ternes sur fond sombre)
+    const cellRgb = (i) => hsv(150 + ((i * 137.508) % 180), 0.35, 0.9); // teintes sourdes, du cyan au rose (sans jaune ni olive)
     const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
     const HEX = { teal: [127, 227, 218], tealDeep: [79, 209, 197], white: [238, 243, 249], hull: [255, 181, 71], tri: [95, 168, 255], violet: [197, 139, 255], red: [255, 122, 89], pink: [255, 93, 122], ink: [133, 146, 165] };
     function seg(a, b, w, color, dash) { ctx.save(); ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.stroke(); ctx.restore(); }
-    function fadeSeg(a, b, w, rgb, alpha) { // plein jusqu'à 55 %, puis s'efface vers b
-      const m = { x: a.x + (b.x - a.x) * 0.55, y: a.y + (b.y - a.y) * 0.55 }, g = ctx.createLinearGradient(m.x, m.y, b.x, b.y);
-      g.addColorStop(0, rgba(rgb, alpha)); g.addColorStop(1, rgba(rgb, 0));
-      seg(a, m, w, rgba(rgb, alpha)); seg(m, b, w, g);
-    }
     function poly(pts, fill, stroke, w, dash) { if (pts.length < 3) return; ctx.save(); ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.stroke(); } ctx.restore(); }
-    function radial(pts, c, rgb, aCenter, aRim) { // éventail depuis le site : plus dense au centre
-      if (pts.length < 3) return;
-      const r = Math.max(...pts.map((p) => Math.hypot(p.x - c.x, p.y - c.y))), g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, Math.max(r, 1));
-      g.addColorStop(0, rgba(rgb, aCenter)); g.addColorStop(1, rgba(rgb, aRim)); poly(pts, g);
-    }
     const disc = (c, r, color) => { ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); };
     const ring = (c, r, w, color, dash) => { ctx.save(); ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 2 * Math.PI); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.stroke(); ctx.restore(); };
     function infinite(p, dir, w, color, dash) { const L = Math.hypot(dir.x, dir.y) || 1, R = 2 * Math.hypot(W, H); seg({ x: p.x - dir.x / L * R, y: p.y - dir.y / L * R }, { x: p.x + dir.x / L * R, y: p.y + dir.y / L * R }, w, color, dash); }
@@ -147,18 +137,17 @@
     function draw() {
       if (!W) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0e141d'); bg.addColorStop(1, '#080b10');
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H); // fond uni, comme une feuille
 
       if (S.layers.grid) {
         const a = toW(0, 0), b = toW(W, H);
-        for (const [step, alpha] of [[100, 0.035], [500, 0.06], [1000, 0.09]]) {
+        for (const [step, alpha] of [[100, 0.04], [500, 0.07], [1000, 0.1]]) {
           if (step / px() < 8) continue;
           for (let x = Math.floor(a.x / step) * step; x <= b.x; x += step) { const sx = toS({ x, y: 0 }).x; seg({ x: sx, y: 0 }, { x: sx, y: H }, 1, `rgba(255,255,255,${alpha})`); }
           for (let y = Math.floor(b.y / step) * step; y <= a.y; y += step) { const sy = toS({ x: 0, y }).y; seg({ x: 0, y: sy }, { x: W, y: sy }, 1, `rgba(255,255,255,${alpha})`); }
         }
         const o = toS({ x: 0, y: 0 });
-        seg(o, { x: W, y: o.y }, 1.2, 'rgba(255,93,93,0.45)'); seg(o, { x: o.x, y: 0 }, 1.2, 'rgba(111,220,149,0.45)');
+        seg(o, { x: W, y: o.y }, 1, 'rgba(255,93,93,0.4)'); seg(o, { x: o.x, y: 0 }, 1, 'rgba(111,220,149,0.4)');
       }
 
       const r = S.result, C = S.construction, labelsOn = S.layers.labels && S.points.length <= 80;
@@ -177,28 +166,22 @@
           hoverCell = cellOf.has(siteKey(hoverP)) ? cellOf.get(siteKey(hoverP)) : -1;
           if (hoverCell >= 0) for (const e of r.vedges) { const ka = e[4] + ',' + e[5], kb = e[6] + ',' + e[7], h = siteKey(cells[hoverCell].site); if (ka === h) neighbors.add(cellOf.get(kb)); else if (kb === h) neighbors.add(cellOf.get(ka)); }
         }
-        // Régions : dégradé depuis le site
+        // Régions : aplat léger, une teinte par région
         cells.forEach((c, i) => {
           const hot = i === hoverCell, near = neighbors.has(i);
-          radial(c.poly.map(toS), toS(c.site), cellRgb(i), (hot ? 0.46 : near ? 0.34 : 0.26) * dim, (hot ? 0.18 : near ? 0.11 : 0.07) * dim);
+          poly(c.poly.map(toS), rgba(cellRgb(i), (hot ? 0.24 : near ? 0.16 : 0.1) * dim));
         });
-        // Arêtes : halo puis trait ; celles qui touchent le cadre s'effacent (régions infinies)
+        // Arêtes : un trait net, jusqu'au cadre
         if (S.layers.edges) {
-          for (const e of r.vedges) {
-            let a = { x: e[0], y: e[1] }, b = { x: e[2], y: e[3] };
-            if (onFrame(a) && !onFrame(b)) [a, b] = [b, a];
-            const A = toS(a), Bs = toS(b);
-            if (onFrame(b)) { fadeSeg(A, Bs, 7, HEX.tealDeep, 0.10 * dim); fadeSeg(A, Bs, 1.6, HEX.teal, 0.95 * dim); }
-            else { seg(A, Bs, 7, rgba(HEX.tealDeep, 0.10 * dim)); seg(A, Bs, 1.6, rgba(HEX.teal, 0.95 * dim)); }
-          }
+          for (const e of r.vedges) seg(toS({ x: e[0], y: e[1] }), toS({ x: e[2], y: e[3] }), 1.4, rgba(HEX.teal, 0.9 * dim));
           const fr = [{ x: B.minX, y: B.minY }, { x: B.maxX, y: B.minY }, { x: B.maxX, y: B.maxY }, { x: B.minX, y: B.maxY }].map(toS);
-          for (let i = 0; i < 4; i++) seg(fr[i], fr[(i + 1) % 4], 1, 'rgba(255,255,255,0.16)', [6, 6]);
-          for (const v of S.vertices) disc(toS(v), 2, rgba([191, 243, 238], 0.7 * dim));
+          for (let i = 0; i < 4; i++) seg(fr[i], fr[(i + 1) % 4], 1, 'rgba(255,255,255,0.14)', [6, 6]);
+          for (const v of S.vertices) disc(toS(v), 1.8, rgba(HEX.teal, 0.9 * dim));
         }
         // Survol d'un site : sa région, ses voisins (arêtes de Delaunay)
         if (hoverCell >= 0) {
           const c = cells[hoverCell];
-          poly(c.poly.map(toS), null, rgba([217, 251, 247], 0.95), 2.4);
+          poly(c.poly.map(toS), null, rgba([217, 251, 247], 0.95), 2);
           for (const j of neighbors) seg(toS(c.site), toS(cells[j].site), 1.3, rgba(HEX.tri, 0.85), [5, 4]);
         }
         // Survol d'un sommet : son cercle vide passe par 3 sites (ou plus)
@@ -233,27 +216,26 @@
 
       if (r && r.kind === 'tri' && S.layers.edges) for (const t of r.tris) {
         const p = [{ x: t[0], y: t[1] }, { x: t[2], y: t[3] }, { x: t[4], y: t[5] }].map(toS);
-        poly(p, rgba(HEX.tri, 0.05));
-        for (let i = 0; i < 3; i++) seg(p[i], p[(i + 1) % 3], 1.3, rgba(HEX.tri, 0.9));
+        poly(p, rgba(HEX.tri, 0.04));
+        for (let i = 0; i < 3; i++) seg(p[i], p[(i + 1) % 3], 1.2, rgba(HEX.tri, 0.9));
       }
       for (const o of Object.values(S.overlays)) for (const s of o.segs) seg(toS({ x: s[0], y: s[1] }), toS({ x: s[2], y: s[3] }), 1.2, o.color);
       if (r && S.layers.hull && r.hull.length > 1) {
         const h = r.hull.map((p) => toS({ x: p[0], y: p[1] }));
         if (h.length > 2) poly(h, rgba(HEX.hull, 0.05));
-        for (let i = 0; i < h.length; i++) { seg(h[i], h[(i + 1) % h.length], 8, rgba(HEX.hull, 0.12)); seg(h[i], h[(i + 1) % h.length], 2.4, rgba(HEX.hull, 1)); }
+        for (let i = 0; i < h.length; i++) seg(h[i], h[(i + 1) % h.length], 2, rgba(HEX.hull, 1));
       }
 
-      // Points : halo, contour sombre, corps
+      // Points : disque plein, fin contour sombre
       const onHull = new Set(r ? r.hull.map((p) => p[0] + ',' + p[1]) : []);
       for (const p of S.points) {
         const s = toS(p), h = onHull.has(p.x + ',' + p.y), ci = cellOf.get(siteKey(p));
         const focus = !C.on || !C.steps || (C.site && p.x === C.site.x && p.y === C.site.y) || (C.steps[C.step] && C.steps[C.step].nb >= 0 && C.sites[C.steps[C.step].nb] && C.sites[C.steps[C.step].nb].x === p.x && C.sites[C.steps[C.step].nb].y === p.y);
         const a = focus ? 1 : 0.45;
-        disc(s, 8, ci != null ? rgba(cellRgb(ci), 0.35 * a) : `rgba(255,255,255,${0.06 * a})`);
-        disc(s, 5.8, `rgba(10,14,20,${a})`);
-        disc(s, 4.2, h ? rgba(HEX.hull, a) : rgba(HEX.white, a));
+        disc(s, 4.8, `rgba(13,17,23,${a})`);
+        disc(s, 3.6, h ? rgba(HEX.hull, a) : rgba(HEX.white, a));
       }
-      if (S.drag) ring(toS(S.drag), 11, 1.5, rgba(HEX.violet, 1)); else if (S.hover) ring(toS(S.hover), 11, 1.5, 'rgba(255,255,255,0.9)');
+      if (S.drag) ring(toS(S.drag), 9, 1.5, rgba(HEX.violet, 1)); else if (S.hover) ring(toS(S.hover), 9, 1.5, 'rgba(255,255,255,0.9)');
 
       // Étiquettes : jamais l'une sur l'autre (le point survolé passe en premier)
       ctx.font = '11px Consolas, monospace'; ctx.textBaseline = 'top';
