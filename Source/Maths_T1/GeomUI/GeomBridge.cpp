@@ -14,6 +14,7 @@ void UGeomBridge::Init(AGeomVisualizer* InVisualizer, AGeomTestPlayerController*
 	{
 		InVisualizer->OnPointsChanged.AddUObject(this, &UGeomBridge::MarkPointsDirty_Internal);
 		InVisualizer->OnResultChanged.AddUObject(this, &UGeomBridge::MarkResultDirty_Internal);
+		InVisualizer->OnConstructionChanged.AddUObject(this, &UGeomBridge::MarkConstructionDirty_Internal);
 	}
 }
 
@@ -32,11 +33,12 @@ void UGeomBridge::Flush(float DeltaSeconds)
 	SinceLastCursor += DeltaSeconds;
 
 	AGeomVisualizer* V = Visualizer.Get();
-	if (V && (bPointsDirty || bResultDirty) && SinceLastPush >= 0.05f)
+	if (V && (bPointsDirty || bResultDirty || bConstructionDirty) && SinceLastPush >= 0.05f)
 	{
 		if (bPointsDirty) Exec(FString::Printf(TEXT("window.onGeomPoints&&window.onGeomPoints(%s)"), *V->PointsToJson()));
 		if (bResultDirty) Exec(FString::Printf(TEXT("window.onGeomResult&&window.onGeomResult(%s)"), *V->ResultToJson()));
-		bPointsDirty = bResultDirty = false;
+		if (bConstructionDirty) Exec(FString::Printf(TEXT("window.onGeomConstruction&&window.onGeomConstruction(%s)"), *V->ConstructionToJson()));
+		bPointsDirty = bResultDirty = bConstructionDirty = false;
 		SinceLastPush = 0.f;
 	}
 
@@ -89,7 +91,7 @@ void UGeomBridge::Ready()
 	UE_LOG(LogMaths_T1, Log, TEXT("Panneau web prêt."));
 	PushState();
 	SetUiScale(UiScale);
-	bPointsDirty = bResultDirty = true;
+	bPointsDirty = bResultDirty = bConstructionDirty = true;
 	SinceLastPush = 1.f; // envoi immédiat au prochain Flush
 }
 
@@ -100,6 +102,7 @@ void UGeomBridge::SetAlgorithm(const FString& Id)
 	else if (Id == TEXT("graham")) A = EGeomAlgorithm::Graham;
 	else if (Id == TEXT("incr")) A = EGeomAlgorithm::Incremental;
 	else if (Id == TEXT("delaunay")) A = EGeomAlgorithm::Delaunay;
+	else if (Id == TEXT("voronoi")) A = EGeomAlgorithm::Voronoi;
 	else { UE_LOG(LogMaths_T1, Warning, TEXT("Algorithme inconnu : %s"), *Id); return; }
 
 	Algorithm = Id;
@@ -149,6 +152,11 @@ void UGeomBridge::SetKernelMode(bool bEnabled)
 void UGeomBridge::SetOverlay(const FString& Name, const FString& Packed, const FString& ColorHex)
 {
 	if (AGeomVisualizer* V = Visualizer.Get()) V->SetOverlay(Name, Packed, FColor::FromHex(ColorHex));
+}
+
+void UGeomBridge::SetConstruction(bool bOn, int32 SiteId, int32 Step)
+{
+	if (AGeomVisualizer* V = Visualizer.Get()) V->SetConstruction(bOn, SiteId, Step);
 }
 
 void UGeomBridge::FrameAll()

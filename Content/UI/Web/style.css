@@ -39,9 +39,14 @@ kbd { font: 500 .7rem var(--font-mono); color: var(--dim); }
   position: fixed; top: 12px; left: 12px; bottom: 12px; width: 27rem; max-width: calc(100% - 24px);
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; overflow: hidden;
+  /* minmax(0, 1fr) : une ligne de texte longue (barre d'état, nom d'appel) ne peut plus élargir le
+     panneau au-delà de sa largeur. Sans ça, le contenu débordait et le bord droit était rogné. */
+  grid-template-columns: minmax(0, 1fr);
 }
+.panel > * { min-width: 0; }
 body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; border: 0; }
 .panel[data-family="tri"] { --accent: var(--tri); }
+.panel[data-family="voronoi"] { --accent: var(--voronoi); }
 .panel[data-algo="delaunay"] { --accent: var(--circle); }
 
 .top { display: flex; align-items: center; gap: .6rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
@@ -57,6 +62,7 @@ body.ue .panel { inset: 0; width: auto; max-width: none; border-radius: 0; borde
 .picker { padding: .75rem 1rem .85rem; border-bottom: 1px solid var(--line); display: grid; gap: .5rem; }
 .group { display: flex; justify-content: space-between; font: 600 .7rem/1 var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; }
+.seg.one { grid-template-columns: 1fr; }
 .seg button { position: relative; text-align: left; padding: .55rem .7rem .5rem; border-radius: 7px; cursor: pointer; border: 1px solid var(--line); background: var(--raise); display: grid; gap: .12rem; }
 .seg button:hover { border-color: var(--line-hi); }
 .seg button strong { font-size: .93rem; font-weight: 600; }
@@ -189,3 +195,16 @@ body.ue #scene, body.ue .sim { display: none; }
 .sim span { background: #0b0f15d9; border: 1px solid var(--line); padding: .45rem .6rem; border-radius: 4px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Construction pas à pas (Voronoï seulement) */
+.build { display: grid; gap: .5rem; padding: .35rem .5rem .6rem; border: 1px solid color-mix(in srgb, var(--voronoi) 35%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--voronoi) 5%, var(--panel)); }
+.panel:not([data-family="voronoi"]) .build { display: none; }
+.build-ctl { display: grid; gap: .55rem; }
+.build-ctl[hidden] { display: none; }
+.btns.five { grid-template-columns: 1fr 1fr 1.8fr 1fr 1fr; }
+.build input[type=range] { accent-color: var(--voronoi); }
+.build-info { margin: 0; font-size: .82rem; line-height: 1.45; color: var(--ink); min-height: 2.4em; }
+.build-info b { color: var(--voronoi); font-weight: 600; }
+.build-info .cut { color: #ff8a73; }
+.check { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--mute); cursor: pointer; }
+.check input { accent-color: var(--voronoi); margin: 0; }

@@ -1,5 +1,6 @@
 #include "GeomTestGameMode.h"
 #include "GeomBridge.h"
+#include "GeomHUD.h"
 #include "GeomTestPawn.h"
 #include "GeomTestPlayerController.h"
 #include "GeomVisualizer.h"
@@ -18,6 +19,7 @@
 AGeomTestGameMode::AGeomTestGameMode()
 {
 	DefaultPawnClass = AGeomTestPawn::StaticClass();
+	HUDClass = AGeomHUD::StaticClass(); // dessine la scène (AGeomVisualizer::Paint)
 	PlayerControllerClass = AGeomTestPlayerController::StaticClass();
 	PrimaryActorTick.bCanEverTick = true;
 }
@@ -140,6 +142,7 @@ void AGeomTestGameMode::UpdatePanelScale()
 	const float ViewportScale = UWidgetLayoutLibrary::GetViewportScale(this);
 	if (ViewportScale <= 0.f || FMath::IsNearlyEqual(ViewportScale, AppliedViewportScale)) return;
 	AppliedViewportScale = ViewportScale;
+	if (Visualizer) Visualizer->DrawScale = ViewportScale; // traits et texte suivent le DPI comme le panneau
 
 	// Dans le SDPIScaler, 1 unité = 1 pixel. La taille du panneau suit l'échelle du jeu,
 	// bornée pour rester lisible dans une petite fenêtre de PIE.

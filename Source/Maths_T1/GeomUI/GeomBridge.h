@@ -15,7 +15,7 @@ class SWebBrowser;
  *   Dans la page : window.ue.geom.setalgorithm("graham"). Unreal met les noms
  *   en minuscules et chaque appel renvoie une Promise.
  * C++ -> page : ExecuteJavascript appelle window.onGeomPoints / onGeomResult /
- *   onGeomState / onGeomCursor / onGeomShortcut.
+ *   onGeomState / onGeomCursor / onGeomShortcut / onGeomConstruction.
  *
  * Les envois vers la page sont regroupés (Flush, 20 fois par seconde au plus) :
  * le navigateur intégré repeint sur le CPU, inutile de lui envoyer chaque frame.
@@ -46,7 +46,7 @@ public:
 	UFUNCTION()
 	void Ready();
 
-	/** "jarvis" | "graham" | "incr" | "delaunay" */
+	/** "jarvis" | "graham" | "incr" | "delaunay" | "voronoi" */
 	UFUNCTION()
 	void SetAlgorithm(const FString& Id);
 
@@ -69,6 +69,13 @@ public:
 	/** Calque calculé par la page. Format : "x1,y1,x2,y2;..." ; chaîne vide = retirer. Couleur "#RRGGBB". */
 	UFUNCTION()
 	void SetOverlay(const FString& Name, const FString& Packed, const FString& ColorHex);
+
+	/**
+	 * Voronoï : construction pas à pas d'une région. SiteId <= 0 garde le site courant,
+	 * un nouveau site repart de l'étape 0. Réponse : window.onGeomConstruction({...}).
+	 */
+	UFUNCTION()
+	void SetConstruction(bool bOn, int32 SiteId, int32 Step);
 
 	UFUNCTION()
 	void FrameAll();
@@ -95,6 +102,7 @@ private:
 	bool bReady = false;
 	bool bPointsDirty = false;
 	bool bResultDirty = false;
+	bool bConstructionDirty = false;
 	float SinceLastPush = 0.f;
 	float SinceLastCursor = 0.f;
 	FVector2D LastSentCursor = FVector2D(1e30, 1e30);
@@ -106,6 +114,7 @@ private:
 
 	void MarkPointsDirty_Internal() { bPointsDirty = true; }
 	void MarkResultDirty_Internal() { bResultDirty = true; }
+	void MarkConstructionDirty_Internal() { bConstructionDirty = true; }
 	void Exec(const FString& Script) const;
 	void PushState();
 };

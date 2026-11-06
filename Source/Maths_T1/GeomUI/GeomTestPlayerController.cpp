@@ -40,6 +40,7 @@ void AGeomTestPlayerController::SetupInputComponent()
 	InputComponent->BindKey(EKeys::Two, IE_Pressed, this, &AGeomTestPlayerController::OnKey2);
 	InputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AGeomTestPlayerController::OnKey3);
 	InputComponent->BindKey(EKeys::Four, IE_Pressed, this, &AGeomTestPlayerController::OnKey4);
+	InputComponent->BindKey(EKeys::Five, IE_Pressed, this, &AGeomTestPlayerController::OnKey5);
 	InputComponent->BindKey(EKeys::A, IE_Pressed, this, &AGeomTestPlayerController::OnToolAdd);
 	InputComponent->BindKey(EKeys::M, IE_Pressed, this, &AGeomTestPlayerController::OnToolMove);
 	InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AGeomTestPlayerController::OnToolDelete);
@@ -84,6 +85,7 @@ void AGeomTestPlayerController::PlayerTick(float DeltaTime)
 	// Déplacement de la caméra au clic molette
 	if (bPanning)
 	{
+		Visualizer->bCursorValid = false;
 		float MX, MY;
 		if (GetMousePosition(MX, MY))
 		{
@@ -95,8 +97,17 @@ void AGeomTestPlayerController::PlayerTick(float DeltaTime)
 	}
 
 	FVector2D W;
-	if (!GetMouseOnPlane(W)) return;
+	if (!GetMouseOnPlane(W))
+	{
+		Visualizer->bCursorValid = false;
+		return;
+	}
 	LastCursor = W;
+
+	// Curseur pour le survol des sommets de Voronoï (pas quand il est sur le panneau)
+	float MouseX = 0.f, MouseY = 0.f;
+	Visualizer->CursorWorld = W;
+	Visualizer->bCursorValid = GetMousePosition(MouseX, MouseY) && MouseX > PanelWidthPx;
 
 	if (Visualizer->DragId != INDEX_NONE)
 	{
@@ -121,11 +132,11 @@ void AGeomTestPlayerController::OnLeftPressed()
 	switch (Tool)
 	{
 	case EGeomTool::Add:
-		if (Hit != INDEX_NONE) { Visualizer->DragId = Hit; }   // glisser un point existant marche aussi
+		if (Hit != INDEX_NONE) { Visualizer->DragId = Hit; Visualizer->OnPointPressed(Hit); }   // glisser un point existant marche aussi
 		else { Visualizer->AddPoint(W); }
 		break;
 	case EGeomTool::Move:
-		if (Hit != INDEX_NONE) { Visualizer->DragId = Hit; }
+		if (Hit != INDEX_NONE) { Visualizer->DragId = Hit; Visualizer->OnPointPressed(Hit); }
 		break;
 	case EGeomTool::Delete:
 		if (Hit != INDEX_NONE) { Visualizer->RemovePoint(Hit); }

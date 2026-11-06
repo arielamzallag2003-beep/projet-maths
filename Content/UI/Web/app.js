@@ -11,16 +11,17 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const ALGOS = ['jarvis', 'graham', 'incr', 'delaunay'];
+const ALGOS = ['jarvis', 'graham', 'incr', 'delaunay', 'voronoi'];
 const CALLS = {
   jarvis: 'ComputeJarvisMarch',
   graham: 'ComputeGrahamScan',
   incr: 'IncrementalTriangulation2D',
   delaunay: 'IncrementalTriangulation2D + FlipEdgesToDelaunay',
+  voronoi: 'ComputeVoronoiHalfPlanes',
 };
-const SHORT = { jarvis: 'Jarvis', graham: 'Graham', incr: 'Incr.', delaunay: 'Delaunay' };
-const CURVE_COLORS = { jarvis: '#ffb547', graham: '#ff7a59', incr: '#5fa8ff', delaunay: '#c58bff' };
-const OVERLAY_COLORS = { reference: '#7a8597', circles: '#7d5aa8', voronoi: '#4fd1c5', diffMissing: '#ff5d7a', diffExtra: '#c58bff' };
+const SHORT = { jarvis: 'Jarvis', graham: 'Graham', incr: 'Incr.', delaunay: 'Delaunay', voronoi: 'Voronoï' };
+const CURVE_COLORS = { jarvis: '#ffb547', graham: '#ff7a59', incr: '#5fa8ff', delaunay: '#c58bff', voronoi: '#4fd1c5' };
+const OVERLAY_COLORS = { reference: '#7a8597', circles: '#7d5aa8', voronoi: '#4fd1c5', dual: '#5fa8ff', diffMissing: '#ff5d7a', diffExtra: '#c58bff' };
 const GEN_NAMES = {
   disc: 'disque', gauss: 'gaussien', clusters: 'amas', circle: 'cercle', grid: 'grille', line: 'alignés',
   three: '3 points', square: 'carré + centre', collinear: 'colinéaires', duplicates: 'doublons', vertical: 'verticales', tiny: 'minuscule',
@@ -30,9 +31,10 @@ const state = {
   geom: null, isUE: false,
   algo: 'jarvis', tool: 'add', kernel: false,
   points: [], result: null, checks: [], hoverId: -1,
-  overlays: { diff: false, reference: false, circles: false, voronoi: false },
+  overlays: { diff: false, reference: false, circles: false, voronoi: false, dual: false },
   layers: { hull: true, edges: true, labels: true, grid: true },
   seeded: false, bench: null,
+  build: { on: false, info: null, timer: 0 },
 };
 
 /* ---------- Appels vers le C++ : jamais d'exception qui casse la page ---------- */
@@ -93,30 +95,37 @@ const fmt = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 /* ---------- Référence JS, mise en cache par jeu de points ---------- */
-const refCache = { key: '', hull: null, tri: null, del: null };
+const refCache = { key: '', hull: null, tri: null, del: null, vor: null, vorBounds: '' };
 function ref(kind) {
   const key = history.current;
-  if (refCache.key !== key) { refCache.key = key; refCache.hull = refCache.tri = refCache.del = null; }
+  if (refCache.key !== key) { refCache.key = key; refCache.hull = refCache.tri = refCache.del = refCache.vor = null; }
   const P = Geo.unique(state.points);
   if (kind === 'hull') return refCache.hull || (refCache.hull = Geo.hull(P));
   if (kind === 'tri') return refCache.tri || (refCache.tri = Geo.triangulate(P));
+  if (kind === 'vor') {
+    // Même cadre que le C++ quand il l'a renvoyé, sinon le cadre automatique
+    const B = (state.result && state.result.bounds) || Geo.voronoiBounds(P), bk = JSON.stringify(B);
+    if (!refCache.vor || refCache.vorBounds !== bk) { refCache.vorBounds = bk; refCache.vor = Geo.voronoiEdgesOf(Geo.voronoiCells(P, B)); }
+    return refCache.vor;
+  }
   return refCache.del || (refCache.del = Geo.delaunay(P).tris);
 }
 
 /* ---------- Algorithme, outil ---------- */
+const familyOf = (id) => (id === 'jarvis' || id === 'graham' ? 'hull' : id === 'voronoi' ? 'voronoi' : 'tri');
 function showAlgo(id) {
   if (!ALGOS.includes(id)) return;
   state.algo = id;
   document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.algo === id)));
   const panel = $('panel');
   panel.dataset.algo = id;
-  panel.dataset.family = id === 'jarvis' || id === 'graham' ? 'hull' : 'tri';
+  panel.dataset.family = familyOf(id);
   $('kernel').disabled = id !== 'delaunay';
   $('kernelHint').textContent = id === 'delaunay'
     ? 'Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.'
     : 'Disponible avec Delaunay uniquement.';
 }
-function selectAlgo(id) { if (state.bench) return; showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
+function selectAlgo(id) { if (state.bench) return; if (id !== 'voronoi' && state.build.on) setBuild(false); showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
 function showTool(t) { state.tool = t; document.querySelectorAll('.tools .btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t))); }
 function selectTool(t) { showTool(t); G('settool', t); }
 
@@ -182,16 +191,20 @@ function setOverlay(name, segs) {
 function pushOverlays() {
   if (state.bench) return;
   const r = state.result, P = state.points, ok = P.length >= 3;
-  const isHull = state.algo === 'jarvis' || state.algo === 'graham';
+  const isHull = state.algo === 'jarvis' || state.algo === 'graham', isVor = state.algo === 'voronoi';
 
   let refSegs = [];
   if (state.overlays.reference && ok) {
     if (isHull) { const H = ref('hull'); refSegs = H.map((p, i) => [p, H[(i + 1) % H.length]]); }
+    else if (isVor) refSegs = ref('vor').map((e) => [e[0], e[1]]);
     else refSegs = uniqueEdges(state.algo === 'delaunay' ? ref('del') : ref('tri'));
   }
   setOverlay('reference', refSegs);
-  setOverlay('circles', state.overlays.circles && r && r.tris.length ? Geo.circleSegments(r.tris) : []);
-  setOverlay('voronoi', state.overlays.voronoi && r && r.tris.length ? Geo.voronoiSegments(r.tris) : []);
+  // Pour Voronoï, cercles et dual viennent de la triangulation de Delaunay de référence
+  const tris = isVor ? (ok ? ref('del') : []) : r ? r.tris : [];
+  setOverlay('circles', state.overlays.circles && tris.length ? Geo.circleSegments(tris) : []);
+  setOverlay('voronoi', state.overlays.voronoi && !isVor && tris.length ? Geo.voronoiSegments(tris) : []);
+  setOverlay('dual', state.overlays.dual && isVor && tris.length ? uniqueEdges(tris) : []);
 
   let missing = [], extra = [];
   if (state.overlays.diff && ok && r) {
@@ -203,6 +216,12 @@ function pushOverlays() {
     } else if (state.algo === 'delaunay' && !Geo.hasCocircular(ref('del'))) {
       const d = Geo.trisDiff(r.tris, ref('del'));
       missing = uniqueEdges(d.missing); extra = uniqueEdges(d.extra);
+    } else if (isVor) {
+      // Arêtes attendues absentes (rouge) ou en trop (violet), repérées par la paire de sites
+      const out = r.vedges || [], refE = ref('vor'), ko = (e) => Geo.key(e[2], e[3]);
+      const so = new Set(out.map(ko)), sr = new Set(refE.map(ko));
+      missing = refE.filter((e) => !so.has(ko(e))).map((e) => [e[0], e[1]]);
+      extra = out.filter((e) => !sr.has(ko(e))).map((e) => [e[0], e[1]]);
     } else if (state.algo === 'incr') {
       // Plusieurs triangulations sont correctes : on ne montre que les triangles plats
       extra = uniqueEdges(r.tris.filter((t) => Geo.triArea(t) < 1e-6));
@@ -233,13 +252,17 @@ function render() {
   $('callMs').textContent = `${fmt(r.ms, r.ms < 10 ? 2 : 1)} ms`;
   $('callIo').innerHTML = r.kind === 'hull'
     ? `Entrée <b>${r.n}</b> points → sortie <b>${r.hull.length}</b> sommet${r.hull.length > 1 ? 's' : ''}`
+    : r.kind === 'voronoi'
+    ? `Entrée <b>${r.n}</b> points → <b>${r.cells.length}</b> régions · <b>${c.edges ?? 0}</b> arêtes · <b>${c.vertices ?? 0}</b> sommets`
     : `Entrée <b>${r.n}</b> points → <b>${c.faces ?? r.tris.length}</b> faces · <b>${c.edges ?? 0}</b> arêtes · <b>${c.vertices ?? 0}</b> sommets${r.kernel ? ' · mode noyau' : ''}`;
 
   $('sH').textContent = r.kind === 'hull' ? r.hull.length : ref('hull').length;
   $('sMs').textContent = fmt(r.ms, r.ms < 10 ? 2 : 0);
-  $('sF').textContent = r.kind === 'tri' ? (c.faces ?? r.tris.length) : '–';
-  $('sE').textContent = r.kind === 'tri' ? (c.edges ?? 0) : '–';
-  $('sV').textContent = r.kind === 'tri' ? (c.vertices ?? 0) : '–';
+  const graph = r.kind === 'tri' || r.kind === 'voronoi';
+  $('sF').textContent = graph ? (c.faces ?? r.tris.length) : '–';
+  $('sE').textContent = graph ? (c.edges ?? 0) : '–';
+  $('sV').textContent = graph ? (c.vertices ?? 0) : '–';
+  $('sFLabel').textContent = r.kind === 'voronoi' ? 'régions' : 'faces';
 
   const v = verdictOf(r, state.checks, Geo.unique(state.points));
   setVerdict(v.state, v.text);
@@ -253,8 +276,8 @@ function render() {
 function verdictOf(r, checks, points) {
   const c = r.counts || {};
   const ko = checks.filter((x) => x.ok === false), ok = checks.filter((x) => x.ok === true).length;
-  const empty = r.kind === 'hull' ? r.hull.length === 0 : r.tris.length === 0 && !(c.edges > 0);
-  if (empty && !Geo.allCollinear(points)) return { state: 'empty', text: 'Sortie vide : fonction encore à écrire ?', first: 'sortie vide' };
+  const empty = r.kind === 'hull' ? r.hull.length === 0 : r.kind === 'voronoi' ? r.cells.length === 0 : r.tris.length === 0 && !(c.edges > 0);
+  if (empty && (r.kind === 'voronoi' || !Geo.allCollinear(points))) return { state: 'empty', text: 'Sortie vide : fonction encore à écrire ?', first: 'sortie vide' };
   if (ko.length) return { state: 'bad', text: `${ko.length} test${ko.length > 1 ? 's' : ''} en échec sur ${ok + ko.length}`, first: ko[0].label };
   return { state: 'ok', text: `Résultat cohérent · ${ok} test${ok > 1 ? 's' : ''} passé${ok > 1 ? 's' : ''}`, first: '' };
 }
@@ -270,6 +293,9 @@ function renderHover() {
   if (r && r.kind === 'hull') {
     const inOut = r.hull.some((h) => Geo.pk(h) === k), inRef = ref('hull').some((h) => Geo.pk(h) === k);
     info = ` · env. C++ ${inOut ? '✓' : '✕'} · réf. ${inRef ? '✓' : '✕'}`;
+  } else if (r && r.kind === 'voronoi') {
+    const cell = r.cells.find((c) => Geo.pk(c.site) === k);
+    info = cell ? ` · région à ${cell.poly.length} côtés${cell.touches ? ', infinie (coupée par le cadre)' : ', bornée'}` : ' · aucune région C++';
   } else if (r) {
     info = ` · ${r.tris.filter((t) => t.some((q) => Geo.pk(q) === k)).length} triangle(s) C++`;
   }
@@ -313,7 +339,55 @@ function normalize(r) {
     tris: (r.tris || []).filter((t) => t.length === 6).map((t) => [toP([t[0], t[1]]), toP([t[2], t[3]]), toP([t[4], t[5]])]),
     edges: (r.edges || []).filter((e) => e.length === 4).map((e) => [toP([e[0], e[1]]), toP([e[2], e[3]])]),
     counts: r.counts || {},
+    cells: (r.cells || []).filter((c) => c.length >= 10 && c.length % 2 === 0).map((c) => ({
+      id: c[0], touches: !!c[1], site: toP([c[2], c[3]]), poly: Array.from({ length: (c.length - 4) / 2 }, (_, k) => toP([c[4 + 2 * k], c[5 + 2 * k]])),
+    })),
+    vedges: (r.vedges || []).filter((e) => e.length === 8).map((e) => [toP([e[0], e[1]]), toP([e[2], e[3]]), toP([e[4], e[5]]), toP([e[6], e[7]])]),
+    bounds: Array.isArray(r.bounds) && r.bounds.length === 4 ? { minX: +r.bounds[0], minY: +r.bounds[1], maxX: +r.bounds[2], maxY: +r.bounds[3] } : null,
   };
+}
+
+/* ---------- Construction pas à pas (Voronoï) ---------- */
+function sendBuild(on, step, site = -1) { G('setconstruction', !!on, site, Math.max(0, step | 0)); }
+function stopPlay() { clearInterval(state.build.timer); state.build.timer = 0; $('bPlay').textContent = 'Lecture'; }
+function nextStep(c, dir) {
+  // Avec « sauter », on passe d'une médiatrice qui coupe à la suivante (et on finit sur la région finale)
+  const last = c.total - 1;
+  if (!$('bSkip').checked) return Math.max(0, Math.min(last, c.step + dir));
+  const cuts = [0, ...(c.cutSteps || []), last].filter((k, i, a) => a.indexOf(k) === i).sort((a, b) => a - b);
+  if (dir > 0) return cuts.find((k) => k > c.step) ?? last;
+  return [...cuts].reverse().find((k) => k < c.step) ?? 0;
+}
+function goStep(dir) { const c = state.build.info; if (c && c.on) sendBuild(true, nextStep(c, dir)); }
+function renderBuild() {
+  const c = state.build.info, on = state.build.on;
+  $('buildOn').checked = on;
+  $('buildCtl').hidden = !on;
+  if (!on) return;
+  const el = $('buildInfo');
+  if (!c || !c.on) { el.textContent = 'Cliquez un point dans le niveau pour construire sa région.'; return; }
+  const last = c.total - 1;
+  $('bStep').max = String(Math.max(0, last)); $('bStep').value = String(c.step);
+  ['bFirst', 'bPrev'].forEach((id) => ($(id).disabled = c.step <= 0));
+  ['bNext', 'bLast'].forEach((id) => ($(id).disabled = c.step >= last));
+  let text;
+  if (c.step === 0) text = `Étape <b>0 / ${last}</b> · on part du cadre, qui contient tous les sites. La région de <b>P${c.site}</b> va être découpée.`;
+  else text = `Étape <b>${c.step} / ${last}</b> · médiatrice de <b>[P${c.site} P${c.neighbor}]</b> : `
+    + (c.cut ? '<span class="cut">elle coupe, la partie du côté de P' + c.neighbor + ' est retirée.</span>' : 'elle ne coupe rien, la région est déjà de ce côté.');
+  if (c.step === last) text += `<br>Région terminée : ${(c.cutSteps || []).length} médiatrice${(c.cutSteps || []).length > 1 ? 's' : ''} utile${(c.cutSteps || []).length > 1 ? 's' : ''}`
+    + (c.skipped ? `, ${c.skipped} site${c.skipped > 1 ? 's' : ''} trop loin, jamais essayé${c.skipped > 1 ? 's' : ''} (arrêt anticipé).` : '.');
+  el.innerHTML = text;
+}
+window.onGeomConstruction = (c) => {
+  state.build.info = c;
+  if (state.build.timer && c && c.step >= c.total - 1) stopPlay();
+  renderBuild();
+};
+function setBuild(on) {
+  state.build.on = on && state.algo === 'voronoi';
+  stopPlay();
+  sendBuild(state.build.on, 0, state.hoverId > 0 ? state.hoverId : -1);
+  renderBuild();
 }
 
 window.onGeomCursor = (x, y) => { $('cursor').textContent = `X ${Math.round(x)} · Y ${Math.round(y)} cm`; };
@@ -357,7 +431,8 @@ function caseResult(r, points) {
 }
 function startBench(kind) {
   if (state.bench || !state.geom) return null;
-  state.bench = { kind, stop: false, waiter: null, currentAlgo: state.algo, saved: { algo: state.algo, packed: history.current } };
+  state.bench = { kind, stop: false, waiter: null, currentAlgo: state.algo, saved: { algo: state.algo, packed: history.current, build: state.build.on } };
+  if (state.build.on) { stopPlay(); sendBuild(false, 0); }
   ['runBattery', 'runAll', 'runCurve'].forEach((id) => ($(id).disabled = true));
   $('stopBench').disabled = false;
   document.querySelectorAll('[data-gen], #clear, #importBtn').forEach((b) => (b.disabled = true));
@@ -375,6 +450,7 @@ function endBench(message) {
   history.applying = true;
   G('setalgorithm', b.saved.algo); showAlgo(b.saved.algo);
   G('setpoints', b.saved.packed);
+  if (b.saved.build) { state.build.on = true; sendBuild(true, 0); renderBuild(); }
   syncUndo();
   sentOverlays = {}; // les calques seront renvoyés avec le résultat
   note(message);
@@ -485,6 +561,20 @@ $('hide').onclick = () => G('togglepanel');
 $('runBattery').onclick = () => runBattery([state.algo]);
 $('runAll').onclick = () => runBattery(ALGOS);
 $('runCurve').onclick = runCurve;
+$('buildOn').onchange = (e) => setBuild(e.target.checked);
+$('bFirst').onclick = () => { stopPlay(); sendBuild(true, 0); };
+$('bLast').onclick = () => { stopPlay(); const c = state.build.info; if (c) sendBuild(true, c.total - 1); };
+$('bPrev').onclick = () => { stopPlay(); goStep(-1); };
+$('bNext').onclick = () => { stopPlay(); goStep(1); };
+$('bStep').oninput = (e) => { stopPlay(); sendBuild(true, +e.target.value); };
+$('bPlay').onclick = () => {
+  const c = state.build.info;
+  if (state.build.timer) { stopPlay(); return; }
+  if (!c || !c.on) return;
+  if (c.step >= c.total - 1) sendBuild(true, 0); // relancer depuis le début
+  $('bPlay').textContent = 'Pause';
+  state.build.timer = setInterval(() => goStep(1), 750);
+};
 $('stopBench').onclick = () => { if (state.bench) { state.bench.stop = true; note('Arrêt demandé…'); } };
 
 window.addEventListener('keydown', (e) => {
@@ -493,7 +583,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (/^[1-4]$/.test(e.key)) selectAlgo(ALGOS[+e.key - 1]);
+  if (/^[1-5]$/.test(e.key)) selectAlgo(ALGOS[+e.key - 1]);
   else if (k === 'a') selectTool('add');
   else if (k === 'm') selectTool('move');
   else if (k === 'x') selectTool('del');

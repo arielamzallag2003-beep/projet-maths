@@ -1,6 +1,6 @@
 # projet-maths
 
-Projet de géométrie algorithmique sous Unreal Engine 5.7 : enveloppes convexes (marche de Jarvis, Graham scan), triangulation incrémentale 2D et triangulation de Delaunay (flips d'arêtes, ajout et suppression de points).
+Projet de géométrie algorithmique sous Unreal Engine 5.7 : enveloppes convexes (marche de Jarvis, Graham scan), triangulation incrémentale 2D, triangulation de Delaunay (flips d'arêtes, ajout et suppression de points) et diagramme de Voronoï.
 
 ## Prérequis
 
@@ -35,6 +35,7 @@ Tout le code des algorithmes est dans `Source/Maths_T1/` :
 | `GeometryMathLibrary.*` | Primitives : orientation, déterminant, cercle circonscrit, critère de Delaunay |
 | `ConvexHullAlgorithms.*` | Marche de Jarvis, Graham scan |
 | `DelaunayTriangulation.*` | Triangulation incrémentale, flips, noyau de Delaunay (ajout / suppression) |
+| `Voronoi/` | Diagramme de Voronoï par intersection de demi-plans, indépendant des autres fichiers ([détails](Source/Maths_T1/Voronoi/README.md)) |
 | `GeomUI/` | Scène de test de l'UI (voir plus bas), sans lien avec les algorithmes |
 
 Toutes les fonctions sont exposées en Blueprint (`UBlueprintFunctionLibrary`), catégorie *Geometry*.
@@ -43,7 +44,7 @@ Les dossiers `Variant_Strategy/` et `Variant_TwinStick/` viennent du template To
 
 ## Scène de test de l'UI
 
-Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms` et `DelaunayTriangulation` telles qu'elles sont, sans rien y changer.
+Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms`, `DelaunayTriangulation` et `VoronoiDiagram` telles qu'elles sont, sans rien y changer.
 
 ### Mise en place (une seule fois)
 
@@ -56,20 +57,28 @@ Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseu
 
 ### Ce qu'on peut tester
 
-- **Les 4 fonctions** (touches `1` à `4`) sur des nuages types (disque, gaussien, amas, cercle, grille cocyclique, alignés) et des **cas limites** (3 points, carré + centre, que des colinéaires, doublons, même abscisse, nuage de 6 cm). Chaque nuage dépend d'une **graine** : même graine, même nuage, pour rejouer exactement un cas.
+- **Les 5 fonctions** (touches `1` à `5`) sur des nuages types (disque, gaussien, amas, cercle, grille cocyclique, alignés) et des **cas limites** (3 points, carré + centre, que des colinéaires, doublons, même abscisse, nuage de 6 cm). Chaque nuage dépend d'une **graine** : même graine, même nuage, pour rejouer exactement un cas.
 - **Souris** : ajouter, glisser, supprimer des points ; le résultat se recalcule à chaque modification (10 fois par seconde au plus si l'algorithme est lent).
 - **Mode noyau** (Delaunay) : ajouts et suppressions via `DelaunayKernel_AddPoint` / `DelaunayKernel_RemovePoint`.
-- **Vérifications** de la sortie réelle : polygone convexe en sens trigonométrique, sans doublon, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, NaN, critère de Delaunay, comparaison avec une référence JS. Une sortie vide est signalée comme « fonction encore à écrire ».
-- **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï.
-- **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou les 4 d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
+- **Vérifications** de la sortie réelle : polygone convexe en sens trigonométrique, sans doublon, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, NaN, critère de Delaunay, comparaison avec une référence JS. Pour Voronoï : chaque région a le bon site le plus proche, les régions pavent le cadre, dualité avec Delaunay. Une sortie vide est signalée comme « fonction encore à écrire ».
+- **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï, triangulation duale (avec Voronoï).
+- **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou tous d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
 - **Exporter / importer** une scène en texte, pour partager un cas qui plante.
+- **Voronoï** : survoler un point met sa région en valeur et relie ses voisins (les arêtes de Delaunay) ; survoler un sommet montre son cercle vide. La **construction pas à pas** (onglet *Scène*) découpe la région d'un point médiatrice par médiatrice, avec lecture automatique.
 - Survoler un point affiche ses informations en bas du panneau. Les réglages du panneau sont mémorisés.
+
+### Rendu
+
+La scène est dessinée en 2D sur le Canvas du HUD (`AGeomHUD`, `FGeomCanvas`) : traits d'épaisseur constante à l'écran avec bords adoucis, régions remplies en dégradé, points en disques, étiquettes qui ne se chevauchent pas. Les tailles suivent l'échelle DPI, comme le panneau. La simulation navigateur (`sim.js`) dessine la même chose avec les mêmes couleurs : on règle l'apparence dans Chrome, puis on la reporte dans `AGeomVisualizer::Paint`.
+
 ### Fichiers
 
 | Fichier | Rôle |
 |---|---|
 | `Source/Maths_T1/GeomUI/GeomTestGameMode.*` | Crée tout, affiche le panneau (`SWebBrowser`) dans un rectangle à gauche |
-| `Source/Maths_T1/GeomUI/GeomVisualizer.*` | Garde les points, appelle les algorithmes, dessine les résultats (DrawDebug) |
+| `Source/Maths_T1/GeomUI/GeomVisualizer.*` | Garde les points, appelle les algorithmes, dessine les résultats (`Paint`) |
+| `Source/Maths_T1/GeomUI/GeomHUD.*` | HUD qui appelle `Paint` à chaque frame |
+| `Source/Maths_T1/GeomUI/GeomCanvas.*` | Dessin 2D antialiasé sur le Canvas : traits, pointillés, disques, polygones, texte |
 | `Source/Maths_T1/GeomUI/GeomTestPawn.*` | Caméra orthographique, X à droite et Y en haut |
 | `Source/Maths_T1/GeomUI/GeomTestPlayerController.*` | Souris et clavier dans le niveau |
 | `Source/Maths_T1/GeomUI/GeomBridge.*` | Pont JS ↔ C++ (`window.ue.geom`) |
@@ -81,7 +90,6 @@ Ouvrir `Content/UI/Web/index.html` dans Chrome : `sim.js` remplace le C++ (avec 
 
 ### Limites connues
 
-- Le dessin utilise `DrawDebug*` : rien ne s'affiche dans un build *Shipping*. Tester en PIE ou en *Development*.
 - Les fonctions renvoient seulement leur résultat final : pas de lecture pas à pas dans Unreal.
 
 ## Contribuer

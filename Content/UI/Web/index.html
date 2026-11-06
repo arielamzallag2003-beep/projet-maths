@@ -30,6 +30,10 @@
       <button data-algo="incr" aria-pressed="false"><strong>Incrémentale</strong><span>Incremental…2D</span><kbd>3</kbd></button>
       <button data-algo="delaunay" aria-pressed="false" style="--c: var(--circle)"><strong>Delaunay</strong><span>+ FlipEdges…</span><kbd>4</kbd></button>
     </div>
+    <div class="group"><span>Diagramme</span><span>Cours 5</span></div>
+    <div class="seg one" style="--c: var(--voronoi)">
+      <button data-algo="voronoi" aria-pressed="false"><strong>Voronoï</strong><span>ComputeVoronoiHalfPlanes · demi-plans</span><kbd>5</kbd></button>
+    </div>
   </div>
 
   <section class="call" aria-label="Dernier appel C++">
@@ -55,6 +59,25 @@
           <button class="btn" data-tool="add" aria-pressed="true">Ajouter <kbd>A</kbd></button>
           <button class="btn" data-tool="move" aria-pressed="false">Déplacer <kbd>M</kbd></button>
           <button class="btn" data-tool="del" aria-pressed="false">Supprimer <kbd>X</kbd></button>
+        </div>
+      </div>
+
+      <div class="build" id="build">
+        <label class="toggle" style="--sw: var(--voronoi)">
+          <input type="checkbox" id="buildOn">
+          <span>Construction pas à pas<small>Une région découpée médiatrice par médiatrice (cours 5). Cliquez un point dans le niveau pour le choisir.</small></span>
+        </label>
+        <div class="build-ctl" id="buildCtl" hidden>
+          <div class="btns five">
+            <button class="btn small" id="bFirst" title="Première étape" aria-label="Première étape">|◀</button>
+            <button class="btn small" id="bPrev" title="Étape précédente" aria-label="Étape précédente">◀</button>
+            <button class="btn small primary" id="bPlay">Lecture</button>
+            <button class="btn small" id="bNext" title="Étape suivante" aria-label="Étape suivante">▶</button>
+            <button class="btn small" id="bLast" title="Région finale" aria-label="Région finale">▶|</button>
+          </div>
+          <input type="range" id="bStep" min="0" max="0" value="0" aria-label="Étape de la construction">
+          <p class="build-info" id="buildInfo" aria-live="polite"></p>
+          <label class="check"><input type="checkbox" id="bSkip" checked> Sauter les médiatrices qui ne coupent rien</label>
         </div>
       </div>
 
@@ -125,8 +148,9 @@
       <div>
         <label class="toggle" style="--sw: var(--bad)"><i></i><span>Différences avec la référence<small>Rouge : attendu mais absent. Violet : en trop.</small></span><input type="checkbox" data-overlay="diff"></label>
         <label class="toggle" style="--sw: #7a8597"><i></i><span>Référence JS<small>Résultat attendu, en gris.</small></span><input type="checkbox" data-overlay="reference"></label>
-        <label class="toggle" style="--sw: var(--circle)"><i></i><span>Cercles circonscrits<small>Des triangles renvoyés par le C++.</small></span><input type="checkbox" data-overlay="circles"></label>
+        <label class="toggle" style="--sw: var(--circle)"><i></i><span>Cercles circonscrits<small>Des triangles renvoyés par le C++ (avec Voronoï : de la triangulation de Delaunay JS).</small></span><input type="checkbox" data-overlay="circles"></label>
         <label class="toggle" style="--sw: var(--voronoi)"><i></i><span>Diagramme de Voronoï<small>Dual de la triangulation renvoyée.</small></span><input type="checkbox" data-overlay="voronoi"></label>
+        <label class="toggle" style="--sw: var(--tri)"><i></i><span>Triangulation duale<small>Avec Voronoï : Delaunay JS, pour voir la dualité (cours 5).</small></span><input type="checkbox" data-overlay="dual"></label>
       </div>
     </section>
 
@@ -136,7 +160,7 @@
         <div class="stat"><b id="sN">0</b><small>points n</small></div>
         <div class="stat h"><b id="sH">–</b><small>sommets env.</small></div>
         <div class="stat"><b id="sMs">–</b><small>ms C++</small></div>
-        <div class="stat t"><b id="sF">–</b><small>faces</small></div>
+        <div class="stat t"><b id="sF">–</b><small id="sFLabel">faces</small></div>
         <div class="stat t"><b id="sE">–</b><small>arêtes</small></div>
         <div class="stat t"><b id="sV">–</b><small>sommets</small></div>
       </div>
@@ -151,7 +175,7 @@
         <p class="note">Lance l'algorithme choisi sur 14 nuages fixes (graines constantes) et vérifie chaque sortie. Cliquer une ligne recharge ce cas dans le niveau.</p>
         <div class="btns two" style="margin-top:.5rem">
           <button class="btn primary" id="runBattery">Lancer la batterie</button>
-          <button class="btn" id="runAll">Les 4 algorithmes</button>
+          <button class="btn" id="runAll">Tous les algorithmes</button>
         </div>
         <table class="results" id="batteryTable" hidden>
           <thead><tr><th>Cas</th><th>n</th><th>ms</th><th>Résultat</th></tr></thead>
@@ -182,9 +206,15 @@
         <kbd>F</kbd><span>Cadrer tous les points</span>
         <kbd>H</kbd><span>Masquer / afficher le panneau</span>
       </div>
+      <h3>Avec Voronoï</h3>
+      <div class="keys">
+        <kbd>Survol d'un point</kbd><span>Sa région, et ses voisins reliés en pointillés (les arêtes de Delaunay)</span>
+        <kbd>Survol d'un sommet</kbd><span>Son cercle vide, qui passe par les sites à égale distance</span>
+        <kbd>Construction</kbd><span>Onglet Scène : la région d'un point découpée médiatrice par médiatrice</span>
+      </div>
       <h3>Partout</h3>
       <div class="keys">
-        <kbd>1 · 2 · 3 · 4</kbd><span>Jarvis · Graham · Incrémentale · Delaunay</span>
+        <kbd>1 à 5</kbd><span>Jarvis · Graham · Incrémentale · Delaunay · Voronoï</span>
         <kbd>A · M · X</kbd><span>Ajouter · déplacer · supprimer</span>
         <kbd>Ctrl Z · Ctrl Y</kbd><span>Annuler · rétablir</span>
         <kbd>R</kbd><span>Relancer l'appel</span>

@@ -27,7 +27,8 @@ public class Maths_T1 : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"WebBrowser" // SWebBrowser, pour le panneau de la scène de test (GeomUI)
+			"WebBrowser", // SWebBrowser, pour le panneau de la scène de test (GeomUI)
+			"RenderCore"  // GWhiteTexture, pour le dessin sur le Canvas du HUD (GeomUI/GeomCanvas)
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -40,7 +41,8 @@ public class Maths_T1 : ModuleRules
 			"Maths_T1/Variant_TwinStick/AI",
 			"Maths_T1/Variant_TwinStick/Gameplay",
 			"Maths_T1/Variant_TwinStick/UI",
-			"Maths_T1/GeomUI"
+			"Maths_T1/GeomUI",
+			"Maths_T1/Voronoi"
 		});
 
 		// Uncomment if you are using Slate UI
