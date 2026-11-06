@@ -8,6 +8,11 @@ public class Maths_T1 : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// Chaque .cpp est compilé séparément (pas de « unity build »). Sinon un #define posé dans un
+		// .cpp (ex. #define GetAngle ...) déborde sur les fichiers regroupés après lui, y compris les
+		// en-têtes du moteur, et casse la compilation de façon difficile à diagnostiquer.
+		bUseUnity = false;
+
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core",
 			"CoreUObject",
@@ -20,7 +25,10 @@ public class Maths_T1 : ModuleRules
 			"GameplayStateTreeModule",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore",
+			"WebBrowser", // SWebBrowser, pour le panneau de la scène de test (GeomUI)
+			"RenderCore"  // GWhiteTexture, pour le dessin sur le Canvas du HUD (GeomUI/GeomCanvas)
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -32,7 +40,9 @@ public class Maths_T1 : ModuleRules
 			"Maths_T1/Variant_TwinStick",
 			"Maths_T1/Variant_TwinStick/AI",
 			"Maths_T1/Variant_TwinStick/Gameplay",
-			"Maths_T1/Variant_TwinStick/UI"
+			"Maths_T1/Variant_TwinStick/UI",
+			"Maths_T1/GeomUI",
+			"Maths_T1/Voronoi"
 		});
 
 		// Uncomment if you are using Slate UI
