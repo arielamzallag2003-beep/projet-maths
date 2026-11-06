@@ -46,12 +46,11 @@ Les dossiers `Variant_Strategy/` et `Variant_TwinStick/` viennent du template To
 
 Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms`, `DelaunayTriangulation` et `VoronoiDiagram` telles qu'elles sont, sans rien y changer.
 
-### Mise en place (une seule fois)
+### Lancer la scène
 
-1. Compiler le projet (le module dépend maintenant de `WebBrowser`).
-2. Dans l'éditeur : *File → New Level → Empty Level*, enregistrer sous `Content/Tests/LVL_TestUI`.
-3. *Window → World Settings → GameMode Override* : choisir **GeomTestGameMode**. Enregistrer.
-4. *Play* (PIE). Le panneau apparaît à gauche, un nuage de 30 points est créé.
+1. Compiler le projet (le module dépend de `WebBrowser`).
+2. Ouvrir le projet : l'éditeur démarre directement sur `Content/LVL_TestUI/LVL_TestUI` (réglé dans `Config/DefaultEngine.ini`, qui en fait aussi le niveau par défaut du jeu). Son *GameMode Override* est **GeomTestGameMode**.
+3. *Play* (PIE). Le panneau apparaît à gauche, un nuage de 30 points est créé.
 
 Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseur et le panneau.
 
