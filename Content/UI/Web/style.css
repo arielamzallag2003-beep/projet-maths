@@ -293,3 +293,28 @@ body.ue #scene, body.ue .sim { display: none; }
 .panel.presenting [data-wip] { display: none !important; }
 .panel:not(.presenting) [data-present-only] { display: none !important; }
 .icon[aria-pressed="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Pas à pas */
+.steps { display: grid; gap: .6rem; }
+.steps[hidden] { display: none; }
+.transport { display: grid; grid-template-columns: 1fr 1fr 2fr 1fr 1fr; gap: .35rem; }
+.st-count { display: flex; justify-content: space-between; align-items: baseline; font: .78rem var(--font-mono); color: var(--mute); }
+.st-count code { color: var(--accent); font-weight: 600; }
+.st-count b { color: var(--ink); }
+.speed { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; padding: 3px; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r); }
+.speed button { border: 0; background: transparent; color: var(--mute); font: 500 .74rem/1 var(--font-mono); padding: .42rem 0; border-radius: 5px; cursor: pointer; }
+.speed button:hover { color: var(--ink); }
+.speed button[aria-pressed="true"] { background: var(--raise-hi); color: var(--ink); box-shadow: 0 0 0 1px var(--line-hi); }
+.st-msg { min-height: 3.2em; padding: .6rem .75rem; border-radius: var(--r); background: var(--raise); border: 1px solid var(--line); font-size: .86rem; line-height: 1.45; }
+.st-msg b { color: var(--accent); font-weight: 600; font-family: var(--font-mono); font-size: .82rem; }
+.pseudo { margin: 0; padding: .45rem 0; list-style: none; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r); font: .78rem/1.6 var(--font-mono); counter-reset: l; }
+.pseudo li { counter-increment: l; display: grid; grid-template-columns: 2rem 1fr; padding-right: .6rem; color: var(--mute); white-space: pre-wrap; }
+.pseudo li::before { content: counter(l); color: var(--dim); text-align: right; padding-right: .7rem; }
+.pseudo li.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+.st-compare { margin: 0; font-size: .8rem; color: var(--good); min-height: 0; }
+.st-compare:empty { display: none; }
+.st-compare code { font-family: var(--font-mono); }
+.block[hidden] { display: none; }
+/* Six onglets : un peu plus serrés pour tenir dans la largeur du panneau */
+.tabs { gap: 0; padding-left: .7rem; padding-right: .7rem; }
+.tabs button { padding: .5rem .48rem .55rem; font-size: .86rem; }

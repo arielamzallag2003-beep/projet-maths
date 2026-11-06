@@ -805,9 +805,10 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 	for (const TPair<FString, FGeomOverlay>& Pair : Overlays)
 	{
 		const FLinearColor Color = Gfx::WithAlpha(FLinearColor::FromSRGBColor(Pair.Value.Color), 0.9f);
+		const float Width = (Pair.Key.StartsWith(TEXT("step")) ? 2.f : 1.2f) * K; // calques du pas à pas : trait plus épais
 		for (const TPair<FVector2D, FVector2D>& Seg : Pair.Value.Segments)
 		{
-			Cv.Line(Cv.ToScreen(Seg.Key), Cv.ToScreen(Seg.Value), 1.2f * K, Color);
+			Cv.Line(Cv.ToScreen(Seg.Key), Cv.ToScreen(Seg.Value), Width, Color);
 		}
 	}
 

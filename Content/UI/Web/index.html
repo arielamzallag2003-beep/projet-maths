@@ -78,6 +78,7 @@
     <button role="tab" id="t-scene" aria-controls="p-scene" aria-selected="true">Scène</button>
     <button role="tab" id="t-view" aria-controls="p-view" aria-selected="false">Calques</button>
     <button role="tab" id="t-check" aria-controls="p-check" aria-selected="false">Vérifications<span class="badge" id="badge"></span></button>
+    <button role="tab" id="t-steps" aria-controls="p-steps" aria-selected="false">Pas à pas</button>
     <button role="tab" id="t-bench" aria-controls="p-bench" aria-selected="false">Banc</button>
     <button role="tab" id="t-help" aria-controls="p-help" aria-selected="false" title="Aide et raccourcis" aria-label="Aide">?</button>
   </div>
@@ -215,6 +216,32 @@
       <p class="note">Chaque test porte sur la sortie réelle de la fonction C++. La référence JS sert seulement de comparaison.</p>
     </section>
 
+    <!-- ================= Pas à pas ================= -->
+    <section class="tabpanel" id="p-steps" role="tabpanel" aria-labelledby="t-steps" hidden>
+      <div class="steps" id="stepsPanel">
+        <div class="transport">
+          <button class="btn small" id="stFirst" title="Première étape (Début)" aria-label="Première étape">|◀</button>
+          <button class="btn small" id="stPrev" title="Étape précédente (←)" aria-label="Étape précédente">◀</button>
+          <button class="btn small primary" id="stPlay" title="Lecture / pause (Espace)">Lecture</button>
+          <button class="btn small" id="stNext" title="Étape suivante (→)" aria-label="Étape suivante">▶</button>
+          <button class="btn small" id="stLast" title="Résultat final (Fin)" aria-label="Résultat final">▶|</button>
+        </div>
+        <div class="st-count"><code id="stCall">–</code><span>étape <b id="stNo">0</b> / <span id="stTot">0</span></span></div>
+        <input type="range" id="stScrub" min="0" max="0" value="0" aria-label="Position dans l'algorithme">
+        <div class="speed" role="group" aria-label="Vitesse">
+          <button data-speed="3" aria-pressed="false">×0,3</button><button data-speed="10" aria-pressed="true">×1</button><button data-speed="25" aria-pressed="false">×2,5</button><button data-speed="60" aria-pressed="false">×6</button><button data-speed="200" aria-pressed="false">×20</button>
+        </div>
+        <div class="st-msg" id="stMsg" aria-live="polite"></div>
+        <ol class="pseudo" id="stPseudo"></ol>
+        <p class="st-compare" id="stCompare"></p>
+        <p class="note">L'animation suit la méthode du code C++ sur les points de la scène ; à la dernière étape, elle est comparée au résultat renvoyé par le C++. Pendant l'animation, le résultat C++ est masqué dans le niveau.</p>
+      </div>
+      <div class="block" id="stepsVoronoi" hidden>
+        <p class="note">Pour Voronoï, la construction pas à pas vient directement du C++ (ComputeVoronoiCellSteps) : onglet Scène, « Construction pas à pas ».</p>
+        <button class="btn" id="stGoBuild">Ouvrir la construction pas à pas</button>
+      </div>
+    </section>
+
     <!-- ================= Banc d'essai ================= -->
     <section class="tabpanel" id="p-bench" role="tabpanel" aria-labelledby="t-bench" hidden>
       <div class="card">
@@ -270,6 +297,7 @@
           <kbd>A · M · X</kbd><span>Ajouter · déplacer · supprimer</span>
           <kbd>Ctrl Z · Ctrl Y</kbd><span>Annuler · rétablir</span>
           <kbd>R</kbd><span>Relancer l'appel</span>
+          <kbd>Espace · ← →</kbd><span>Onglet Pas à pas : lecture, étape précédente / suivante</span>
           <kbd>P</kbd><span>Mode présentation : masque ce qui n'est pas encore terminé</span>
         </div>
       </div>
@@ -281,6 +309,7 @@
 </aside>
 
 <script src="reference.js"></script>
+<script src="steps.js"></script>
 <script src="app.js"></script>
 <script src="sim.js"></script>
 </body>

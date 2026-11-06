@@ -233,7 +233,7 @@
         poly(p, rgba(HEX.tri, 0.04));
         for (let i = 0; i < 3; i++) seg(p[i], p[(i + 1) % 3], 1.2, rgba(HEX.tri, 0.9));
       }
-      for (const o of Object.values(S.overlays)) for (const s of o.segs) seg(toS({ x: s[0], y: s[1] }), toS({ x: s[2], y: s[3] }), 1.2, o.color);
+      for (const [name, o] of Object.entries(S.overlays)) for (const s of o.segs) seg(toS({ x: s[0], y: s[1] }), toS({ x: s[2], y: s[3] }), name.startsWith('step') ? 2 : 1.2, o.color); // pas à pas : trait plus épais
       if (r && S.layers.hull && r.hull.length > 1) {
         const h = r.hull.map((p) => toS({ x: p[0], y: p[1] }));
         if (h.length > 2) poly(h, rgba(HEX.hull, 0.05));

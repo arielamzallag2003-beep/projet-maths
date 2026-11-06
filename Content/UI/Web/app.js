@@ -336,6 +336,7 @@ window.onGeomResult = (raw) => {
   render();
   pushOverlays();
   if (state.hoverId > 0) renderHover();
+  GeomSteps.refresh();
 };
 function normalize(r) {
   const toP = (a) => ({ x: +a[0], y: +a[1] });
@@ -559,6 +560,7 @@ document.querySelectorAll('[data-overlay]').forEach((c) => (c.onchange = () => {
 function openTab(id) {
   if (!$(id)) id = 't-scene';
   document.querySelectorAll('[role=tab]').forEach((t) => { const on = t.id === id; t.setAttribute('aria-selected', String(on)); $(t.getAttribute('aria-controls')).hidden = !on; });
+  GeomSteps.setActive(id === 't-steps');
   savePrefs();
 }
 document.querySelectorAll('[role=tab]').forEach((t) => (t.onclick = () => openTab(t.id)));
@@ -596,6 +598,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); undo(); return; }
   if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (GeomSteps.key(e)) { e.preventDefault(); return; }
   if (/^[1-5]$/.test(e.key)) selectAlgo(ALGOS[+e.key - 1]);
   else if (k === 'a') selectTool('add');
   else if (k === 'm') selectTool('move');
@@ -605,6 +608,22 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'h') G('togglepanel');
   else if (k === 'p') setPresentation(!state.presentation);
 });
+
+/* ---------- Pas à pas (steps.js) ---------- */
+let resultHidden = false;
+GeomSteps.init({
+  points: () => state.points,
+  algo: () => state.algo,
+  result: () => state.result,
+  overlay: (name, segs, color) => { OVERLAY_COLORS[name] = color; setOverlay(name, segs); },
+  // Pendant l'animation, on masque l'enveloppe et les arêtes calculées par le C++
+  hideResult: (on) => {
+    if (on === resultHidden) return;
+    resultHidden = on;
+    ['hull', 'edges'].forEach((name) => G('setlayer', name, on ? false : !!state.layers[name]));
+  },
+});
+$('stGoBuild').onclick = () => { openTab('t-scene'); if (!$('buildOn').checked) $('buildOn').click(); };
 
 /* ---------- Mode présentation ---------- */
 function setPresentation(on) {
