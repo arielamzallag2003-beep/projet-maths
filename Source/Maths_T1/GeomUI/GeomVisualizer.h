@@ -133,6 +133,12 @@ private:
 	void ClearResults();
 	void ExtractTriangulation();
 	bool IsValidVertex(const FGeomVertex* V) const;
+
+	/**
+	 * Journal de test (branche test/triangulation) : vérifie la sortie de la triangulation
+	 * sans la modifier et écrit un rapport dans LogMaths_T1 (Output Log).
+	 */
+	void LogTriangulationReport(const TCHAR* Stage) const;
 	int32 FindVertexId(const FVector& P) const;
 	bool IsLayerOn(const FString& Name) const;
 	void NotifyPoints();

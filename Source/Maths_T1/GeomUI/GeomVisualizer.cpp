@@ -2,6 +2,7 @@
 #include "ConvexHullAlgorithms.h"
 #include "DelaunayTriangulation.h"
 #include "GeomCanvas.h"
+#include "Algo/Sort.h"
 #include "Maths_T1.h"
 
 AGeomVisualizer::AGeomVisualizer()
@@ -240,14 +241,20 @@ void AGeomVisualizer::Recompute()
 
 	case EGeomAlgorithm::Incremental:
 		LastCall = TEXT("IncrementalTriangulation2D");
+		UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de IncrementalTriangulation2D sur %d points"), Points.Num());
 		UDelaunayTriangulation::IncrementalTriangulation2D(Points, Vertices, Edges, Faces);
+		LogTriangulationReport(TEXT("après IncrementalTriangulation2D"));
 		bHasTriangulation = true;
 		break;
 
 	case EGeomAlgorithm::Delaunay:
 		LastCall = TEXT("IncrementalTriangulation2D + FlipEdgesToDelaunay");
+		UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de IncrementalTriangulation2D sur %d points"), Points.Num());
 		UDelaunayTriangulation::IncrementalTriangulation2D(Points, Vertices, Edges, Faces);
+		LogTriangulationReport(TEXT("après IncrementalTriangulation2D"));
+		UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] Appel de FlipEdgesToDelaunay"));
 		UDelaunayTriangulation::FlipEdgesToDelaunay(Edges, Faces);
+		LogTriangulationReport(TEXT("après FlipEdgesToDelaunay"));
 		bHasTriangulation = true;
 		break;
 
@@ -284,6 +291,143 @@ bool AGeomVisualizer::IsValidVertex(const FGeomVertex* V) const
 	}
 	const FGeomVertex* Begin = Vertices.GetData();
 	return V >= Begin && V < Begin + Vertices.Num();
+}
+
+void AGeomVisualizer::LogTriangulationReport(const TCHAR* Stage) const
+{
+	// Pas de rapport pendant qu'on glisse un point (un recalcul par frame)
+	if (DragId != INDEX_NONE)
+	{
+		return;
+	}
+
+	// Lecture seule : on ne déréférence un pointeur qu'après avoir vérifié qu'il est dans son tableau
+	auto InArray = [](const void* Ptr, const void* Begin, int32 Count, SIZE_T Stride)
+	{
+		const uint8* P = static_cast<const uint8*>(Ptr);
+		const uint8* B = static_cast<const uint8*>(Begin);
+		return P && B && Count > 0 && P >= B && P < B + Count * Stride && (P - B) % Stride == 0;
+	};
+	auto ValidV = [&](const FGeomVertex* V) { return InArray(V, Vertices.GetData(), Vertices.Num(), sizeof(FGeomVertex)); };
+	auto ValidE = [&](const FGeomEdge* E) { return InArray(E, Edges.GetData(), Edges.Num(), sizeof(FGeomEdge)); };
+	auto ValidF = [&](const FGeomFace* F) { return InArray(F, Faces.GetData(), Faces.Num(), sizeof(FGeomFace)); };
+	auto Orient = [](const FVector& A, const FVector& B, const FVector& C)
+	{
+		return (B.X - A.X) * (C.Y - A.Y) - (B.Y - A.Y) * (C.X - A.X);
+	};
+
+	// ---- Attendu, calculé ici : enveloppe convexe (chaîne monotone) et points sur son bord
+	TArray<FVector> P = Points;
+	P.Sort([](const FVector& A, const FVector& B) { return A.X < B.X || (A.X == B.X && A.Y < B.Y); });
+	TArray<FVector> H;
+	for (int32 Pass = 0; Pass < 2; ++Pass)
+	{
+		const int32 Start = H.Num();
+		for (int32 k = 0; k < P.Num(); ++k)
+		{
+			const FVector& Q = Pass == 0 ? P[k] : P[P.Num() - 1 - k];
+			while (H.Num() >= Start + 2 && Orient(H[H.Num() - 2], H.Last(), Q) <= 0.0) H.Pop();
+			H.Add(Q);
+		}
+		H.Pop(); // le dernier point est le premier de la passe suivante
+	}
+	double HullArea = 0.0;
+	for (int32 k = 0; k < H.Num(); ++k) HullArea += Orient(FVector::ZeroVector, H[k], H[(k + 1) % H.Num()]) * 0.5;
+	const bool bCollinear = H.Num() < 3 || FMath::Abs(HullArea) < 1e-6;
+	int32 OnBoundary = 0;
+	for (const FVector& Q : Points)
+	{
+		for (int32 k = 0; k < H.Num(); ++k)
+		{
+			const FVector& A = H[k];
+			const FVector& B = H[(k + 1) % H.Num()];
+			const double Len = FVector::Dist2D(A, B);
+			const bool bOnLine = Len > 0.0 && FMath::Abs(Orient(A, B, Q)) / Len < 0.01;
+			const bool bBetween = FMath::Min(A.X, B.X) - 0.01 <= Q.X && Q.X <= FMath::Max(A.X, B.X) + 0.01
+				&& FMath::Min(A.Y, B.Y) - 0.01 <= Q.Y && Q.Y <= FMath::Max(A.Y, B.Y) + 0.01;
+			if (bOnLine && bBetween) { ++OnBoundary; break; }
+		}
+	}
+	const int32 N = Points.Num();
+	const int32 ExpectedFaces = bCollinear ? 0 : 2 * N - 2 - OnBoundary;
+	const int32 ExpectedEdges = bCollinear ? N - 1 : 3 * N - 3 - OnBoundary;
+
+	// ---- Faces
+	int32 BadFaceVertex = 0, BadFaceEdge = 0, NullFaceEdge = 0, Flat = 0, Clockwise = 0, DuplicateFaces = 0, NotDelaunay = 0;
+	double Area = 0.0;
+	TSet<FString> FaceKeys;
+	for (const FGeomFace& F : Faces)
+	{
+		for (int32 k = 0; k < 3; ++k)
+		{
+			if (!F.Edges[k]) ++NullFaceEdge;
+			else if (!ValidE(F.Edges[k])) ++BadFaceEdge;
+		}
+		if (!ValidV(F.Vertices[0]) || !ValidV(F.Vertices[1]) || !ValidV(F.Vertices[2]))
+		{
+			++BadFaceVertex;
+			continue;
+		}
+		const FVector& A = F.Vertices[0]->Position;
+		const FVector& B = F.Vertices[1]->Position;
+		const FVector& C = F.Vertices[2]->Position;
+		const double O = Orient(A, B, C);
+		if (FMath::Abs(O) < 1e-6) { ++Flat; continue; }
+		if (O < 0.0) ++Clockwise;
+		Area += FMath::Abs(O) * 0.5;
+
+		int32 Ids[3] = { F.Vertices[0]->ID, F.Vertices[1]->ID, F.Vertices[2]->ID };
+		Algo::Sort(Ids);
+		const FString Key = FString::Printf(TEXT("%d,%d,%d"), Ids[0], Ids[1], Ids[2]);
+		if (FaceKeys.Contains(Key)) ++DuplicateFaces; else FaceKeys.Add(Key);
+
+		// Critère de Delaunay : aucun point strictement dans le cercle circonscrit
+		const double Bx = B.X - A.X, By = B.Y - A.Y, Cx = C.X - A.X, Cy = C.Y - A.Y, D = 2.0 * (Bx * Cy - By * Cx);
+		const double Ux = (Cy * (Bx * Bx + By * By) - By * (Cx * Cx + Cy * Cy)) / D;
+		const double Uy = (Bx * (Cx * Cx + Cy * Cy) - Cx * (Bx * Bx + By * By)) / D;
+		const FVector Center(A.X + Ux, A.Y + Uy, 0.0);
+		const double R2 = Ux * Ux + Uy * Uy;
+		for (const FVector& Q : Points)
+		{
+			if (FVector::DistSquared2D(Q, Center) < R2 * (1.0 - 1e-9) - 1e-6) { ++NotDelaunay; break; }
+		}
+	}
+
+	// ---- Arêtes
+	int32 BadEdgeVertex = 0, DuplicateEdges = 0, NoFace = 0, OneFace = 0, TwoFaces = 0, LeftSet = 0, RightSet = 0, BadFacePointer = 0;
+	TSet<FString> EdgeKeys;
+	for (const FGeomEdge& E : Edges)
+	{
+		if (!ValidV(E.V1) || !ValidV(E.V2)) { ++BadEdgeVertex; continue; }
+		const int32 Lo = FMath::Min(E.V1->ID, E.V2->ID), Hi = FMath::Max(E.V1->ID, E.V2->ID);
+		const FString Key = FString::Printf(TEXT("%d,%d"), Lo, Hi);
+		if (EdgeKeys.Contains(Key)) ++DuplicateEdges; else EdgeKeys.Add(Key);
+
+		if (E.LeftFace) { ++LeftSet; if (!ValidF(E.LeftFace)) ++BadFacePointer; }
+		if (E.RightFace) { ++RightSet; if (!ValidF(E.RightFace)) ++BadFacePointer; }
+		const int32 Count = (E.LeftFace ? 1 : 0) + (E.RightFace ? 1 : 0);
+		if (Count == 0) ++NoFace; else if (Count == 1) ++OneFace; else ++TwoFaces;
+	}
+
+	const double Coverage = HullArea > 1e-6 ? Area / HullArea : 0.0;
+	const bool bProblem = Faces.Num() != ExpectedFaces || Edges.Num() != ExpectedEdges || BadFaceVertex || BadFaceEdge
+		|| BadEdgeVertex || BadFacePointer || Flat || Clockwise || DuplicateFaces || DuplicateEdges
+		|| (!bCollinear && FMath::Abs(Coverage - 1.0) > 1e-3);
+
+	const ELogVerbosity::Type Level = bProblem ? ELogVerbosity::Warning : ELogVerbosity::Log;
+	auto Line = [Level](const FString& Text)
+	{
+		if (Level == ELogVerbosity::Warning) { UE_LOG(LogMaths_T1, Warning, TEXT("[Triangulation] %s"), *Text); }
+		else { UE_LOG(LogMaths_T1, Log, TEXT("[Triangulation] %s"), *Text); }
+	};
+	Line(FString::Printf(TEXT("---- Rapport %s (%d points, %d sur le bord de l'enveloppe%s) ----"), Stage, N, OnBoundary, bCollinear ? TEXT(", tous alignés") : TEXT("")));
+	Line(FString::Printf(TEXT("Sommets %d / %d | Faces %d / attendu %d | Arêtes %d / attendu %d"), Vertices.Num(), N, Faces.Num(), ExpectedFaces, Edges.Num(), ExpectedEdges));
+	Line(FString::Printf(TEXT("Faces : %d pointeur(s) de sommet invalide(s), %d pointeur(s) d'arête hors du tableau Edges, %d arête(s) nulle(s), %d plate(s), %d en sens horaire, %d en double"),
+		BadFaceVertex, BadFaceEdge, NullFaceEdge, Flat, Clockwise, DuplicateFaces));
+	Line(FString::Printf(TEXT("Recouvrement : aire des triangles / aire de l'enveloppe = %.3f (1.000 attendu, > 1 = triangles superposés, < 1 = trous)"), Coverage));
+	Line(FString::Printf(TEXT("Arêtes : %d sommet(s) invalide(s), %d en double | faces : %d sans face, %d avec une face, %d avec deux | LeftFace %d, RightFace %d, dont %d pointeur(s) hors du tableau Faces"),
+		BadEdgeVertex, DuplicateEdges, NoFace, OneFace, TwoFaces, LeftSet, RightSet, BadFacePointer));
+	Line(FString::Printf(TEXT("Delaunay : %d triangle(s) dont le cercle circonscrit contient un autre point"), NotDelaunay));
 }
 
 void AGeomVisualizer::ExtractTriangulation()
