@@ -542,18 +542,60 @@ namespace GeomStyle
 {
 	using Gfx = FGeomCanvas;
 
-	/** Teinte sourde par région, du cyan au rose (jamais de jaune ni d'olive, ternes sur fond sombre). */
-	FLinearColor CellColor(int32 Index, float Alpha)
+	/** Palette des régions : 7 teintes nettement différentes, lisibles sur fond sombre (même ordre que sim.js). */
+	const TCHAR* const CellPalette[] = { TEXT("#4FD1C5"), TEXT("#60A5FA"), TEXT("#A78BFA"), TEXT("#F472B6"), TEXT("#86EFAC"), TEXT("#FDE68A"), TEXT("#FF8F70") };
+	constexpr int32 CellPaletteNum = sizeof(CellPalette) / sizeof(CellPalette[0]);
+
+	/**
+	 * Coloration façon carte : deux régions voisines n'ont jamais la même couleur.
+	 * Glouton de Welsh-Powell : les régions les plus entourées d'abord, chacune prend, parmi les
+	 * couleurs qu'aucune voisine déjà coloriée n'utilise, la moins employée jusque-là (toute la
+	 * palette sert, au lieu des 4 premières). 7 couleurs suffisent largement pour ce graphe planaire ;
+	 * si jamais elles manquaient, on reprendrait la palette.
+	 */
+	TArray<int32> ColorCells(const TArray<FVoronoiCell>& Cells)
 	{
-		const double H = 150.0 + FMath::Fmod(Index * 137.508, 180.0), S = 0.35, V = 0.9;
-		auto F = [&](double N)
+		const int32 N = Cells.Num();
+		auto Canon = [&Cells](int32 i) { return Cells.IsValidIndex(i) && Cells[i].DuplicateOf != INDEX_NONE ? Cells[i].DuplicateOf : i; };
+		TArray<int32> Order, Colors;
+		int32 Count[CellPaletteNum] = {};
+		Order.Reserve(N);
+		Colors.Init(INDEX_NONE, N);
+		for (int32 i = 0; i < N; ++i)
 		{
-			const double K = FMath::Fmod(N + H / 60.0, 6.0);
-			return static_cast<uint8>(FMath::RoundToInt((V - V * S * FMath::Max(0.0, FMath::Min3(K, 4.0 - K, 1.0))) * 255.0));
-		};
-		FLinearColor Out = FLinearColor::FromSRGBColor(FColor(F(5.0), F(3.0), F(1.0)));
-		Out.A = Alpha;
-		return Out;
+			if (Cells[i].DuplicateOf == INDEX_NONE) Order.Add(i);
+		}
+		Order.Sort([&Cells](int32 A, int32 B)
+		{
+			const int32 Da = Cells[A].EdgeNeighbors.Num(), Db = Cells[B].EdgeNeighbors.Num();
+			return Da != Db ? Da > Db : A < B; // ordre stable : les couleurs ne sautent pas d'une image à l'autre
+		});
+		for (const int32 i : Order)
+		{
+			uint32 Used = 0;
+			for (const int32 j : Cells[i].EdgeNeighbors)
+			{
+				const int32 c = Cells.IsValidIndex(j) ? Colors[Canon(j)] : INDEX_NONE;
+				if (c != INDEX_NONE && c < 32) Used |= 1u << c;
+			}
+			int32 Color = INDEX_NONE;
+			for (int32 c = 0; c < CellPaletteNum; ++c)
+			{
+				if (!(Used & (1u << c)) && (Color == INDEX_NONE || Count[c] < Count[Color])) Color = c;
+			}
+			Colors[i] = Color != INDEX_NONE ? Color : i % CellPaletteNum;
+			++Count[Colors[i]];
+		}
+		for (int32 i = 0; i < N; ++i)
+		{
+			if (Colors[i] == INDEX_NONE) Colors[i] = Colors.IsValidIndex(Canon(i)) && Colors[Canon(i)] != INDEX_NONE ? Colors[Canon(i)] : 0;
+		}
+		return Colors;
+	}
+
+	FLinearColor CellColor(int32 ColorIndex, float Alpha)
+	{
+		return FGeomCanvas::Hex(CellPalette[((ColorIndex % CellPaletteNum) + CellPaletteNum) % CellPaletteNum], Alpha);
 	}
 }
 
@@ -630,7 +672,8 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			}
 		}
 
-		// Régions : aplat léger, une teinte par région
+		// Régions : aplat coloré façon carte, deux voisines n'ont jamais la même teinte
+		const TArray<int32> Colors = ColorCells(VoronoiCells);
 		TArray<FVector2D> Poly;
 		for (int32 i = 0; i < VoronoiCells.Num(); ++i)
 		{
@@ -639,15 +682,15 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			Poly.Reset();
 			for (const FVector& V : Cell.Polygon) Poly.Add(S(V));
 			const bool bHot = i == HotCell, bNear = Near.Contains(i);
-			Cv.ConvexFill(Poly, CellColor(i, (bHot ? 0.24f : bNear ? 0.16f : 0.1f) * Dim));
+			Cv.ConvexFill(Poly, CellColor(Colors[i], (bHot ? 0.4f : bNear ? 0.28f : HotCell != INDEX_NONE ? 0.12f : 0.2f) * Dim));
 		}
 
 		if (IsLayerOn(TEXT("edges")))
 		{
-			// Arêtes : un trait net, jusqu'au cadre
+			// Arêtes : un trait fin, jusqu'au cadre
 			for (const FVoronoiEdge& E : VoronoiEdges)
 			{
-				Cv.Line(S(E.A), S(E.B), 1.4f * K, Gfx::WithAlpha(Teal, 0.9f * Dim));
+				Cv.Line(S(E.A), S(E.B), 1.2f * K, Gfx::WithAlpha(TealPale, 0.5f * Dim)); // clair et fin : la couleur vient des régions
 			}
 			// Cadre qui coupe les régions infinies, en pointillés
 			const FVector2D F0 = S(VoronoiBoundsMin), F2 = S(VoronoiBoundsMax), F1(F2.X, F0.Y), F3(F0.X, F2.Y);
@@ -658,7 +701,7 @@ void AGeomVisualizer::Paint(UCanvas* InCanvas)
 			Cv.DashedLine(F3, F0, 1.f * K, Frame, 6.f * K, 6.f * K);
 			for (const FVector& V : VoronoiVertices)
 			{
-				Cv.Disc(S(V), 1.8f * K, Gfx::WithAlpha(Teal, 0.9f * Dim));
+				Cv.Disc(S(V), 1.8f * K, Gfx::WithAlpha(TealPale, 0.8f * Dim));
 			}
 		}
 

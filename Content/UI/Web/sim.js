@@ -124,8 +124,19 @@
     }
 
     /* ---- Dessin : mêmes formes, couleurs et tailles que AGeomVisualizer::Paint (C++) ---- */
-    const hsv = (h, s, v) => { const f = (n) => { const k = (n + h / 60) % 6; return Math.round((v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255); }; return [f(5), f(3), f(1)]; };
-    const cellRgb = (i) => hsv(150 + ((i * 137.508) % 180), 0.35, 0.9); // teintes sourdes, du cyan au rose (sans jaune ni olive)
+    // Palette des régions, même ordre que GeomStyle::CellPalette (C++)
+    const PALETTE = ['#4FD1C5', '#60A5FA', '#A78BFA', '#F472B6', '#86EFAC', '#FDE68A', '#FF8F70'].map((h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)));
+    // Coloration façon carte (Welsh-Powell, couleur libre la moins employée), comme GeomStyle::ColorCells : deux voisines n'ont jamais la même couleur
+    function colorCells(adj) {
+      const order = adj.map((_, i) => i).sort((a, b) => adj[b].size - adj[a].size || a - b), colors = new Array(adj.length).fill(-1), count = PALETTE.map(() => 0);
+      for (const i of order) {
+        const used = new Set([...adj[i]].map((j) => colors[j]));
+        let best = -1; // parmi les couleurs libres, la moins employée : toute la palette sert
+        for (let c = 0; c < PALETTE.length; c++) if (!used.has(c) && (best < 0 || count[c] < count[best])) best = c;
+        colors[i] = best >= 0 ? best : i % PALETTE.length; count[colors[i]]++;
+      }
+      return colors;
+    }
     const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
     const HEX = { teal: [127, 227, 218], tealDeep: [79, 209, 197], white: [238, 243, 249], hull: [255, 181, 71], tri: [95, 168, 255], violet: [197, 139, 255], red: [255, 122, 89], pink: [255, 93, 122], ink: [133, 146, 165] };
     function seg(a, b, w, color, dash) { ctx.save(); ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = color; ctx.lineWidth = w; if (dash) ctx.setLineDash(dash); ctx.stroke(); ctx.restore(); }
@@ -166,17 +177,20 @@
           hoverCell = cellOf.has(siteKey(hoverP)) ? cellOf.get(siteKey(hoverP)) : -1;
           if (hoverCell >= 0) for (const e of r.vedges) { const ka = e[4] + ',' + e[5], kb = e[6] + ',' + e[7], h = siteKey(cells[hoverCell].site); if (ka === h) neighbors.add(cellOf.get(kb)); else if (kb === h) neighbors.add(cellOf.get(ka)); }
         }
-        // Régions : aplat léger, une teinte par région
+        // Régions : aplat coloré façon carte, deux voisines n'ont jamais la même teinte
+        const adj = cells.map(() => new Set());
+        for (const e of r.vedges) { const a = cellOf.get(e[4] + ',' + e[5]), b = cellOf.get(e[6] + ',' + e[7]); if (a !== undefined && b !== undefined && a !== b) { adj[a].add(b); adj[b].add(a); } }
+        const colors = colorCells(adj);
         cells.forEach((c, i) => {
           const hot = i === hoverCell, near = neighbors.has(i);
-          poly(c.poly.map(toS), rgba(cellRgb(i), (hot ? 0.24 : near ? 0.16 : 0.1) * dim));
+          poly(c.poly.map(toS), rgba(PALETTE[colors[i]], (hot ? 0.4 : near ? 0.28 : hoverCell >= 0 ? 0.12 : 0.2) * dim));
         });
-        // Arêtes : un trait net, jusqu'au cadre
+        // Arêtes : un trait fin, jusqu'au cadre
         if (S.layers.edges) {
-          for (const e of r.vedges) seg(toS({ x: e[0], y: e[1] }), toS({ x: e[2], y: e[3] }), 1.4, rgba(HEX.teal, 0.9 * dim));
+          for (const e of r.vedges) seg(toS({ x: e[0], y: e[1] }), toS({ x: e[2], y: e[3] }), 1.2, rgba([217, 251, 247], 0.5 * dim)); // la couleur vient des régions
           const fr = [{ x: B.minX, y: B.minY }, { x: B.maxX, y: B.minY }, { x: B.maxX, y: B.maxY }, { x: B.minX, y: B.maxY }].map(toS);
           for (let i = 0; i < 4; i++) seg(fr[i], fr[(i + 1) % 4], 1, 'rgba(255,255,255,0.14)', [6, 6]);
-          for (const v of S.vertices) disc(toS(v), 1.8, rgba(HEX.teal, 0.9 * dim));
+          for (const v of S.vertices) disc(toS(v), 1.8, rgba([217, 251, 247], 0.8 * dim));
         }
         // Survol d'un site : sa région, ses voisins (arêtes de Delaunay)
         if (hoverCell >= 0) {
