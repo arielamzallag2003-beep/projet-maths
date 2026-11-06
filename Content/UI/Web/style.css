@@ -208,3 +208,10 @@ body.ue #scene, body.ue .sim { display: none; }
 .build-info .cut { color: #ff8a73; }
 .check { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--mute); cursor: pointer; }
 .check input { accent-color: var(--voronoi); margin: 0; }
+
+/* Test mis en avant par « Détails » */
+.checks li.flash { animation: check-flash 1.4s ease-out; }
+@keyframes check-flash { 0%, 30% { box-shadow: 0 0 0 2px var(--bad); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.checks li.ok.flash { animation-name: check-flash-ok; }
+@keyframes check-flash-ok { 0%, 30% { box-shadow: 0 0 0 2px var(--good); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .checks li.flash { animation: none; outline: 2px solid var(--bad); } }

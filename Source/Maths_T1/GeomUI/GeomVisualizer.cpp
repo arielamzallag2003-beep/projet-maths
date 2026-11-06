@@ -202,6 +202,7 @@ void AGeomVisualizer::ClearResults()
 	ResultEdges.Reset();
 	InvalidFaces = 0;
 	InvalidEdges = 0;
+	InvalidLinks = 0;
 	bHasTriangulation = false;
 	VoronoiCells.Reset();
 	VoronoiEdges.Reset();
@@ -291,9 +292,23 @@ void AGeomVisualizer::ExtractTriangulation()
 	ResultEdges.Reset();
 	InvalidFaces = 0;
 	InvalidEdges = 0;
+	InvalidLinks = 0;
+
+	// Un pointeur non nul doit désigner un élément de son tableau. Sinon il vise une variable
+	// temporaire disparue ou un tableau réalloué : on le compte sans jamais le suivre.
+	auto InArray = [](const void* Ptr, const void* Begin, int32 Count, SIZE_T Stride)
+	{
+		const uint8* P = static_cast<const uint8*>(Ptr);
+		const uint8* B = static_cast<const uint8*>(Begin);
+		return B && Count > 0 && P >= B && P < B + Count * Stride && (P - B) % Stride == 0;
+	};
 
 	for (const FGeomFace& Face : Faces)
 	{
+		for (const FGeomEdge* E : Face.Edges)
+		{
+			if (E && !InArray(E, Edges.GetData(), Edges.Num(), sizeof(FGeomEdge))) ++InvalidLinks;
+		}
 		if (IsValidVertex(Face.Vertices[0]) && IsValidVertex(Face.Vertices[1]) && IsValidVertex(Face.Vertices[2]))
 		{
 			ResultTriangles.Add({ Face.Vertices[0]->Position, Face.Vertices[1]->Position, Face.Vertices[2]->Position });
@@ -305,6 +320,8 @@ void AGeomVisualizer::ExtractTriangulation()
 	}
 	for (const FGeomEdge& Edge : Edges)
 	{
+		if (Edge.LeftFace && !InArray(Edge.LeftFace, Faces.GetData(), Faces.Num(), sizeof(FGeomFace))) ++InvalidLinks;
+		if (Edge.RightFace && !InArray(Edge.RightFace, Faces.GetData(), Faces.Num(), sizeof(FGeomFace))) ++InvalidLinks;
 		if (IsValidVertex(Edge.V1) && IsValidVertex(Edge.V2))
 		{
 			ResultEdges.Emplace(Edge.V1->Position, Edge.V2->Position);
@@ -448,10 +465,10 @@ FString AGeomVisualizer::ResultToJson() const
 	// reconnaître la réponse à une requête précise, par exemple pendant la batterie de tests)
 	return FString::Printf(
 		TEXT("{\"algo\":\"%s\",\"call\":\"%s\",\"ms\":%.4f,\"n\":%d,\"seq\":%d,\"firstId\":%d,\"kind\":\"%s\",\"kernel\":%s,%s,")
-		TEXT("\"counts\":{\"vertices\":%d,\"edges\":%d,\"faces\":%d,\"invalidFaces\":%d,\"invalidEdges\":%d,\"nonFinite\":%d}}"),
+		TEXT("\"counts\":{\"vertices\":%d,\"edges\":%d,\"faces\":%d,\"invalidFaces\":%d,\"invalidEdges\":%d,\"invalidLinks\":%d,\"nonFinite\":%d}}"),
 		Names[(int32)Algorithm], *JsonString(LastCall), FMath::IsFinite(LastMs) ? LastMs : 0.0, Points.Num(), ResultSeq,
 		PointIds.Num() ? PointIds[0] : 0, bVoronoi ? TEXT("voronoi") : bTri ? TEXT("tri") : TEXT("hull"), bKernelMode ? TEXT("true") : TEXT("false"), *Body,
-		CountVertices, CountEdges, CountFaces, InvalidFaces, InvalidEdges, NonFinite);
+		CountVertices, CountEdges, CountFaces, InvalidFaces, InvalidEdges, InvalidLinks, NonFinite);
 }
 
 // ---------------------------------------------------------------- Construction pas à pas
