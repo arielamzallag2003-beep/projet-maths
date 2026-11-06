@@ -81,6 +81,166 @@ namespace VoronoiHalfPlanes
 		}
 	}
 
+	/** Données communes à toutes les régions : sites en 2D, doublons, cadre et tolérances. */
+	struct FSetup
+	{
+		TArray<FVector2D> P;
+		TArray<int32> DuplicateOf;
+		FVector2D BoxMin = FVector2D::ZeroVector;
+		FVector2D BoxMax = FVector2D::ZeroVector;
+		double Eps = 0.0;
+		double Merge = 0.0;
+	};
+
+	void Prepare(const TArray<FVector>& Sites, double BoundsMargin, FSetup& S)
+	{
+		const int32 N = Sites.Num();
+		S.P.Reset();
+		S.P.Reserve(N);
+
+		// Cadre de découpe : boîte englobante des sites, agrandie de la marge
+		FVector2D BoxMin(TNumericLimits<double>::Max(), TNumericLimits<double>::Max());
+		FVector2D BoxMax(-TNumericLimits<double>::Max(), -TNumericLimits<double>::Max());
+		for (const FVector& Site : Sites)
+		{
+			const FVector2D Q(Site.X, Site.Y);
+			S.P.Add(Q);
+			BoxMin = FVector2D(FMath::Min(BoxMin.X, Q.X), FMath::Min(BoxMin.Y, Q.Y));
+			BoxMax = FVector2D(FMath::Max(BoxMax.X, Q.X), FMath::Max(BoxMax.Y, Q.Y));
+		}
+		const double Extent = FMath::Max(BoxMax.X - BoxMin.X, BoxMax.Y - BoxMin.Y);
+		const double Margin = BoundsMargin > 0.0 ? BoundsMargin : FMath::Max(0.5 * Extent, 100.0);
+		S.BoxMin = BoxMin - FVector2D(Margin, Margin);
+		S.BoxMax = BoxMax + FVector2D(Margin, Margin);
+
+		// Tolérances relatives à la taille du cadre (le même code marche à 6 cm comme à 60 m)
+		const double Scale = FMath::Max(S.BoxMax.X - S.BoxMin.X, S.BoxMax.Y - S.BoxMin.Y);
+		S.Eps = 1e-9 * Scale;   // « sur la médiatrice »
+		S.Merge = 1e-6 * Scale; // deux sommets confondus, deux sites confondus
+
+		// Doublons exacts : une seule région, partagée
+		S.DuplicateOf.Init(INDEX_NONE, N);
+		for (int32 i = 0; i < N; ++i)
+		{
+			for (int32 j = 0; j < i; ++j)
+			{
+				if (S.DuplicateOf[j] == INDEX_NONE && FVector2D::DistSquared(S.P[i], S.P[j]) <= S.Merge * S.Merge)
+				{
+					S.DuplicateOf[i] = j;
+					break;
+				}
+			}
+		}
+	}
+
+	TArray<FVector> ToVectors(const TArray<FClipVertex>& Poly)
+	{
+		TArray<FVector> Out;
+		Out.Reserve(Poly.Num());
+		for (const FClipVertex& V : Poly)
+		{
+			Out.Add(FVector(V.P.X, V.P.Y, 0.0));
+		}
+		return Out;
+	}
+
+	double Area(const TArray<FClipVertex>& Poly)
+	{
+		double Sum = 0.0;
+		for (int32 k = 0; k < Poly.Num(); ++k)
+		{
+			const FVector2D& A = Poly[k].P;
+			const FVector2D& B = Poly[(k + 1) % Poly.Num()].P;
+			Sum += A.X * B.Y - B.X * A.Y;
+		}
+		return 0.5 * Sum;
+	}
+
+	/**
+	 * Région du site i : le cadre (sens trigonométrique) coupé par les demi-plans E_ij,
+	 * du site le plus proche au plus loin. Si Steps n'est pas nul, chaque découpe y est
+	 * enregistrée (construction pas à pas) ; OutSkipped reçoit le nombre de sites ignorés
+	 * grâce à l'arrêt anticipé.
+	 */
+	void BuildCell(const FSetup& S, int32 i, TArray<FClipVertex>& Poly, TArray<FClipVertex>& Scratch, TArray<int32>& Order,
+		TArray<FVoronoiCellStep>* Steps, int32* OutSkipped)
+	{
+		const int32 N = S.P.Num();
+		Poly.Reset();
+		Poly.Add({ FVector2D(S.BoxMin.X, S.BoxMin.Y), INDEX_NONE });
+		Poly.Add({ FVector2D(S.BoxMax.X, S.BoxMin.Y), INDEX_NONE });
+		Poly.Add({ FVector2D(S.BoxMax.X, S.BoxMax.Y), INDEX_NONE });
+		Poly.Add({ FVector2D(S.BoxMin.X, S.BoxMax.Y), INDEX_NONE });
+
+		if (Steps)
+		{
+			FVoronoiCellStep& First = Steps->AddDefaulted_GetRef();
+			First.Polygon = ToVectors(Poly);
+		}
+
+		// Les autres sites, du plus proche au plus loin
+		Order.Reset();
+		for (int32 j = 0; j < N; ++j)
+		{
+			if (j != i && S.DuplicateOf[j] == INDEX_NONE)
+			{
+				Order.Add(j);
+			}
+		}
+		const FVector2D Pi = S.P[i];
+		const TArray<FVector2D>& P = S.P;
+		Order.Sort([&P, &Pi](int32 A, int32 B) { return FVector2D::DistSquared(P[A], Pi) < FVector2D::DistSquared(P[B], Pi); });
+
+		TArray<FClipVertex> Removed;
+		for (int32 o = 0; o < Order.Num(); ++o)
+		{
+			const int32 j = Order[o];
+
+			// Arrêt anticipé : si tout le polygone tient dans le disque de centre Pi et de rayon
+			// |Pj - Pi| / 2, il est entièrement dans E_ij, et aussi dans E_ik pour tous les sites
+			// k plus loin que j. Les découpes restantes ne changeraient rien.
+			double Radius2 = 0.0;
+			for (const FClipVertex& V : Poly)
+			{
+				Radius2 = FMath::Max(Radius2, FVector2D::DistSquared(V.P, Pi));
+			}
+			if (0.25 * FVector2D::DistSquared(P[j], Pi) > Radius2 + S.Eps)
+			{
+				if (OutSkipped)
+				{
+					*OutSkipped = Order.Num() - o;
+				}
+				return;
+			}
+
+			if (Steps)
+			{
+				// Partie retirée : ce qui est du côté de Pj
+				Removed = Poly;
+				ClipByBisector(Removed, P[j], Pi, i, S.Eps, Scratch);
+			}
+
+			ClipByBisector(Poly, Pi, P[j], j, S.Eps, Scratch);
+			RemoveTinyEdges(Poly, S.Merge);
+
+			if (Steps)
+			{
+				FVoronoiCellStep& Step = Steps->AddDefaulted_GetRef();
+				Step.Neighbor = j;
+				Step.Polygon = ToVectors(Poly);
+				Step.bCut = Removed.Num() >= 3 && FMath::Abs(Area(Removed)) > S.Merge * S.Merge;
+				if (Step.bCut)
+				{
+					Step.Removed = ToVectors(Removed);
+				}
+			}
+		}
+		if (OutSkipped)
+		{
+			*OutSkipped = 0;
+		}
+	}
+
 	uint64 PairKey(int32 A, int32 B)
 	{
 		const uint32 Lo = static_cast<uint32>(FMath::Min(A, B));
@@ -103,44 +263,10 @@ void UVoronoiDiagram::ComputeVoronoiHalfPlanes(const TArray<FVector>& Sites, dou
 		return;
 	}
 
-	// ---- Cadre de découpe : boîte englobante des sites, agrandie de la marge
-	TArray<FVector2D> P;
-	P.Reserve(N);
-	FVector2D BoxMin(TNumericLimits<double>::Max(), TNumericLimits<double>::Max());
-	FVector2D BoxMax(-TNumericLimits<double>::Max(), -TNumericLimits<double>::Max());
-	for (const FVector& S : Sites)
-	{
-		const FVector2D Q(S.X, S.Y);
-		P.Add(Q);
-		BoxMin = FVector2D(FMath::Min(BoxMin.X, Q.X), FMath::Min(BoxMin.Y, Q.Y));
-		BoxMax = FVector2D(FMath::Max(BoxMax.X, Q.X), FMath::Max(BoxMax.Y, Q.Y));
-	}
-	const double Extent = FMath::Max(BoxMax.X - BoxMin.X, BoxMax.Y - BoxMin.Y);
-	const double Margin = BoundsMargin > 0.0 ? BoundsMargin : FMath::Max(0.5 * Extent, 100.0);
-	BoxMin -= FVector2D(Margin, Margin);
-	BoxMax += FVector2D(Margin, Margin);
-	OutBoundsMin = FVector(BoxMin.X, BoxMin.Y, 0.0);
-	OutBoundsMax = FVector(BoxMax.X, BoxMax.Y, 0.0);
-
-	// Tolérances relatives à la taille du cadre (le même code marche à 6 cm comme à 60 m)
-	const double Scale = FMath::Max(BoxMax.X - BoxMin.X, BoxMax.Y - BoxMin.Y);
-	const double Eps = 1e-9 * Scale;   // « sur la médiatrice »
-	const double Merge = 1e-6 * Scale; // deux sommets confondus, deux sites confondus
-
-	// ---- Doublons exacts : une seule région, partagée
-	TArray<int32> DuplicateOf;
-	DuplicateOf.Init(INDEX_NONE, N);
-	for (int32 i = 0; i < N; ++i)
-	{
-		for (int32 j = 0; j < i; ++j)
-		{
-			if (DuplicateOf[j] == INDEX_NONE && FVector2D::DistSquared(P[i], P[j]) <= Merge * Merge)
-			{
-				DuplicateOf[i] = j;
-				break;
-			}
-		}
-	}
+	FSetup S;
+	Prepare(Sites, BoundsMargin, S);
+	OutBoundsMin = FVector(S.BoxMin.X, S.BoxMin.Y, 0.0);
+	OutBoundsMax = FVector(S.BoxMax.X, S.BoxMax.Y, 0.0);
 
 	OutCells.SetNum(N);
 	TArray<FClipVertex> Poly, Scratch;
@@ -151,50 +277,14 @@ void UVoronoiDiagram::ComputeVoronoiHalfPlanes(const TArray<FVector>& Sites, dou
 	{
 		FVoronoiCell& Cell = OutCells[i];
 		Cell.SiteIndex = i;
-		Cell.Site = FVector(P[i].X, P[i].Y, 0.0);
-		Cell.DuplicateOf = DuplicateOf[i];
-		if (DuplicateOf[i] != INDEX_NONE)
+		Cell.Site = FVector(S.P[i].X, S.P[i].Y, 0.0);
+		Cell.DuplicateOf = S.DuplicateOf[i];
+		if (S.DuplicateOf[i] != INDEX_NONE)
 		{
 			continue; // rempli plus bas avec la région du premier exemplaire
 		}
 
-		// R_i = intersection des demi-plans E_ij : on part du cadre (sens trigonométrique)
-		Poly.Reset();
-		Poly.Add({ FVector2D(BoxMin.X, BoxMin.Y), INDEX_NONE });
-		Poly.Add({ FVector2D(BoxMax.X, BoxMin.Y), INDEX_NONE });
-		Poly.Add({ FVector2D(BoxMax.X, BoxMax.Y), INDEX_NONE });
-		Poly.Add({ FVector2D(BoxMin.X, BoxMax.Y), INDEX_NONE });
-
-		// Les autres sites, du plus proche au plus loin
-		Order.Reset();
-		for (int32 j = 0; j < N; ++j)
-		{
-			if (j != i && DuplicateOf[j] == INDEX_NONE)
-			{
-				Order.Add(j);
-			}
-		}
-		const FVector2D Pi = P[i];
-		Order.Sort([&P, &Pi](int32 A, int32 B) { return FVector2D::DistSquared(P[A], Pi) < FVector2D::DistSquared(P[B], Pi); });
-
-		for (const int32 j : Order)
-		{
-			// Arrêt anticipé : si tout le polygone tient dans le disque de centre Pi et de rayon
-			// |Pj - Pi| / 2, il est entièrement dans E_ij, et aussi dans E_ik pour tous les sites
-			// k plus loin que j. Les découpes restantes ne changeraient rien.
-			double Radius2 = 0.0;
-			for (const FClipVertex& V : Poly)
-			{
-				Radius2 = FMath::Max(Radius2, FVector2D::DistSquared(V.P, Pi));
-			}
-			if (0.25 * FVector2D::DistSquared(P[j], Pi) > Radius2 + Eps)
-			{
-				break;
-			}
-
-			ClipByBisector(Poly, Pi, P[j], j, Eps, Scratch);
-			RemoveTinyEdges(Poly, Merge);
-		}
+		BuildCell(S, i, Poly, Scratch, Order, nullptr, nullptr);
 
 		Cell.Polygon.Reserve(Poly.Num());
 		Cell.EdgeNeighbors.Reserve(Poly.Num());
@@ -208,14 +298,40 @@ void UVoronoiDiagram::ComputeVoronoiHalfPlanes(const TArray<FVector>& Sites, dou
 
 	for (int32 i = 0; i < N; ++i)
 	{
-		if (DuplicateOf[i] != INDEX_NONE)
+		if (S.DuplicateOf[i] != INDEX_NONE)
 		{
-			const FVoronoiCell& Source = OutCells[DuplicateOf[i]];
+			const FVoronoiCell& Source = OutCells[S.DuplicateOf[i]];
 			OutCells[i].Polygon = Source.Polygon;
 			OutCells[i].EdgeNeighbors = Source.EdgeNeighbors;
 			OutCells[i].bTouchesBounds = Source.bTouchesBounds;
 		}
 	}
+}
+
+void UVoronoiDiagram::ComputeVoronoiCellSteps(const TArray<FVector>& Sites, int32 SiteIndex, double BoundsMargin,
+	TArray<FVoronoiCellStep>& OutSteps, int32& OutSkippedSites, FVector& OutBoundsMin, FVector& OutBoundsMax)
+{
+	using namespace VoronoiHalfPlanes;
+
+	OutSteps.Reset();
+	OutSkippedSites = 0;
+	OutBoundsMin = FVector::ZeroVector;
+	OutBoundsMax = FVector::ZeroVector;
+	if (!Sites.IsValidIndex(SiteIndex))
+	{
+		return;
+	}
+
+	FSetup S;
+	Prepare(Sites, BoundsMargin, S);
+	OutBoundsMin = FVector(S.BoxMin.X, S.BoxMin.Y, 0.0);
+	OutBoundsMax = FVector(S.BoxMax.X, S.BoxMax.Y, 0.0);
+
+	// Un doublon a la région de son premier exemplaire
+	const int32 Canonical = S.DuplicateOf[SiteIndex] != INDEX_NONE ? S.DuplicateOf[SiteIndex] : SiteIndex;
+	TArray<FClipVertex> Poly, Scratch;
+	TArray<int32> Order;
+	BuildCell(S, Canonical, Poly, Scratch, Order, &OutSteps, &OutSkippedSites);
 }
 
 TArray<FVoronoiEdge> UVoronoiDiagram::ExtractVoronoiEdges(const TArray<FVoronoiCell>& Cells)

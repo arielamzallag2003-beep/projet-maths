@@ -40,6 +40,29 @@ struct FVoronoiCell
 	int32 DuplicateOf = INDEX_NONE;
 };
 
+/** Une étape de la construction d'une région : la découpe par une médiatrice. */
+USTRUCT(BlueprintType)
+struct FVoronoiCellStep
+{
+	GENERATED_BODY()
+
+	/** Site dont la médiatrice coupe à cette étape. INDEX_NONE pour l'étape 0 (le cadre seul). */
+	UPROPERTY(BlueprintReadOnly, Category = "Geometry|Voronoi")
+	int32 Neighbor = INDEX_NONE;
+
+	/** Polygone après cette étape, sens trigonométrique. */
+	UPROPERTY(BlueprintReadOnly, Category = "Geometry|Voronoi")
+	TArray<FVector> Polygon;
+
+	/** Partie retirée à cette étape (du côté du voisin). Vide si la médiatrice ne coupe rien. */
+	UPROPERTY(BlueprintReadOnly, Category = "Geometry|Voronoi")
+	TArray<FVector> Removed;
+
+	/** Vrai si la médiatrice a réellement retiré une partie du polygone. */
+	UPROPERTY(BlueprintReadOnly, Category = "Geometry|Voronoi")
+	bool bCut = false;
+};
+
 /** Arête du diagramme : frontière commune aux régions de SiteA et SiteB (SiteA < SiteB). */
 USTRUCT(BlueprintType)
 struct FVoronoiEdge
@@ -86,6 +109,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Geometry|Voronoi")
 	static void ComputeVoronoiHalfPlanes(const TArray<FVector>& Sites, double BoundsMargin,
 		TArray<FVoronoiCell>& OutCells, FVector& OutBoundsMin, FVector& OutBoundsMax);
+
+	/**
+	 * Construction pas à pas de la région d'un seul site, pour la montrer : étape 0 = le cadre,
+	 * puis une étape par médiatrice essayée, du site le plus proche au plus loin. La dernière
+	 * étape donne exactement la région de ComputeVoronoiHalfPlanes.
+	 *
+	 * @param OutSkippedSites  Sites jamais essayés grâce à l'arrêt anticipé (trop loin pour couper).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Geometry|Voronoi")
+	static void ComputeVoronoiCellSteps(const TArray<FVector>& Sites, int32 SiteIndex, double BoundsMargin,
+		TArray<FVoronoiCellStep>& OutSteps, int32& OutSkippedSites, FVector& OutBoundsMin, FVector& OutBoundsMax);
 
 	/** Arêtes du diagramme, chacune une seule fois (les morceaux du cadre ne sont pas des arêtes). */
 	UFUNCTION(BlueprintCallable, Category = "Geometry|Voronoi")
