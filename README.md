@@ -1,6 +1,6 @@
 # projet-maths
 
-Projet de géométrie algorithmique sous Unreal Engine 5.7 : enveloppes convexes (marche de Jarvis, Graham scan), triangulation incrémentale 2D et triangulation de Delaunay (flips d'arêtes, ajout et suppression de points).
+Projet de géométrie algorithmique sous Unreal Engine 5.7 : enveloppes convexes (marche de Jarvis, Graham scan), triangulation incrémentale 2D, triangulation de Delaunay (flips d'arêtes, ajout et suppression de points) et diagramme de Voronoï.
 
 ## Prérequis
 
@@ -35,6 +35,7 @@ Tout le code des algorithmes est dans `Source/Maths_T1/` :
 | `GeometryMathLibrary.*` | Primitives : orientation, déterminant, cercle circonscrit, critère de Delaunay |
 | `ConvexHullAlgorithms.*` | Marche de Jarvis, Graham scan |
 | `DelaunayTriangulation.*` | Triangulation incrémentale, flips, noyau de Delaunay (ajout / suppression) |
+| `Voronoi/` | Diagramme de Voronoï par intersection de demi-plans, indépendant des autres fichiers ([détails](Source/Maths_T1/Voronoi/README.md)) |
 | `GeomUI/` | Scène de test de l'UI (voir plus bas), sans lien avec les algorithmes |
 
 Toutes les fonctions sont exposées en Blueprint (`UBlueprintFunctionLibrary`), catégorie *Geometry*.
@@ -43,7 +44,7 @@ Les dossiers `Variant_Strategy/` et `Variant_TwinStick/` viennent du template To
 
 ## Scène de test de l'UI
 
-Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms` et `DelaunayTriangulation` telles qu'elles sont, sans rien y changer.
+Une scène dédiée pour essayer le panneau web et voir la sortie des algorithmes dans le niveau. Elle **appelle** les fonctions de `ConvexHullAlgorithms`, `DelaunayTriangulation` et `VoronoiDiagram` telles qu'elles sont, sans rien y changer.
 
 ### Mise en place (une seule fois)
 
@@ -56,14 +57,15 @@ Le niveau ne contient rien : `AGeomTestGameMode` crée la caméra, le visualiseu
 
 ### Ce qu'on peut tester
 
-- **Les 4 fonctions** (touches `1` à `4`) sur des nuages types (disque, gaussien, amas, cercle, grille cocyclique, alignés) et des **cas limites** (3 points, carré + centre, que des colinéaires, doublons, même abscisse, nuage de 6 cm). Chaque nuage dépend d'une **graine** : même graine, même nuage, pour rejouer exactement un cas.
+- **Les 5 fonctions** (touches `1` à `5`) sur des nuages types (disque, gaussien, amas, cercle, grille cocyclique, alignés) et des **cas limites** (3 points, carré + centre, que des colinéaires, doublons, même abscisse, nuage de 6 cm). Chaque nuage dépend d'une **graine** : même graine, même nuage, pour rejouer exactement un cas.
 - **Souris** : ajouter, glisser, supprimer des points ; le résultat se recalcule à chaque modification (10 fois par seconde au plus si l'algorithme est lent).
 - **Mode noyau** (Delaunay) : ajouts et suppressions via `DelaunayKernel_AddPoint` / `DelaunayKernel_RemovePoint`.
-- **Vérifications** de la sortie réelle : polygone convexe en sens trigonométrique, sans doublon, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, NaN, critère de Delaunay, comparaison avec une référence JS. Une sortie vide est signalée comme « fonction encore à écrire ».
-- **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï.
-- **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou les 4 d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
+- **Vérifications** de la sortie réelle : polygone convexe en sens trigonométrique, sans doublon, tous les points dedans, Euler, pavage de l'enveloppe, pointeurs du graphe d'incidence, NaN, critère de Delaunay, comparaison avec une référence JS. Pour Voronoï : chaque région a le bon site le plus proche, les régions pavent le cadre, dualité avec Delaunay. Une sortie vide est signalée comme « fonction encore à écrire ».
+- **Calques** : différences avec la référence (rouge : attendu mais absent, violet : en trop), référence JS, cercles circonscrits, Voronoï, triangulation duale (avec Voronoï).
+- **Banc d'essai** : batterie de 14 cas fixes (un algorithme ou tous d'un coup, cliquer une ligne recharge le cas) et courbe du temps C++ en fonction de n.
 - **Exporter / importer** une scène en texte, pour partager un cas qui plante.
 - Survoler un point affiche ses informations en bas du panneau. Les réglages du panneau sont mémorisés.
+
 ### Fichiers
 
 | Fichier | Rôle |
