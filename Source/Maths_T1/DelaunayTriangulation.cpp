@@ -210,31 +210,59 @@ void UDelaunayTriangulation::FlipEdgesToDelaunay(TArray<FGeomEdge>& Edges, TArra
 				FGeomFace* NewFaceTopPt = &Faces.Last();
 
 				FGeomFace NewFaceBottom;
-				//NewFaceBottom.ID = OutFaces.Num();
+				NewFaceBottom.ID = Faces.Num();
 				NewFaceBottom.Vertices[0] = OppLeft;
 				NewFaceBottom.Vertices[1] = V1Bottom;
 				NewFaceBottom.Vertices[2] = OppRight;
 				NewFaceBottom.Edges[0] = BottomLeftEdge;
 				NewFaceBottom.Edges[1] = BottomRightEdge;
 				NewFaceBottom.Edges[2] = &Edge;
-				//OutFaces.Add(NewFaceBottom);
+				Faces.Add(NewFaceBottom);
+				FGeomFace* NewFaceBottomPt = &Faces.Last();
 
 				// On arrange les faces pointées par les arrêtes
 				if (TopLeftEdge->LeftFace == LeftFace)
 				{
-					TopLeftEdge->LeftFace = &NewFaceTop;
+					TopLeftEdge->LeftFace = NewFaceTopPt;
 				}
-				else if (TopLeftEdge->RightFace == RightFace)
+				else if (TopLeftEdge->RightFace == LeftFace)
 				{
-					TopLeftEdge->RightFace = &NewFaceTop;
+					TopLeftEdge->RightFace = NewFaceTopPt;
+				}
+				
+				if (TopRightEdge->LeftFace == RightFace)
+				{
+					TopRightEdge->LeftFace = NewFaceTopPt;
+				}
+				else if (TopRightEdge->RightFace == RightFace)
+				{
+					TopRightEdge->RightFace = NewFaceTopPt;
+				}
+
+				if (BottomLeftEdge->LeftFace == LeftFace)
+				{
+					BottomLeftEdge->LeftFace = NewFaceBottomPt;
+				}
+				else if (BottomLeftEdge->RightFace == LeftFace)
+				{
+					BottomLeftEdge->RightFace = NewFaceBottomPt;
+				}
+
+				if (BottomRightEdge->LeftFace == RightFace)
+				{
+					BottomRightEdge->LeftFace = NewFaceBottomPt;
+				}
+				else if (BottomRightEdge->RightFace == RightFace)
+				{
+					BottomRightEdge->RightFace = NewFaceBottomPt;
 				}
 				
 				// on flip l'arête [V1, V2] (devient [Opp1, Opp2])
 				Edge.V1 = OppLeft;
 				Edge.V2 = OppRight;
+				Edge.LeftFace = NewFaceTopPt;
+				Edge.RightFace = NewFaceBottomPt;
 
-				// TODO : Mise à jour de la topologie des faces adjacentes
-				// (Le quadrilatère [V1, Opp1, V2, Opp2] est réorganisé)
 				bHasFlipped = true;
 				break;
 			}
