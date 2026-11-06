@@ -62,6 +62,25 @@
         </div>
       </div>
 
+      <div class="build" id="build">
+        <label class="toggle" style="--sw: var(--voronoi)">
+          <input type="checkbox" id="buildOn">
+          <span>Construction pas à pas<small>Une région découpée médiatrice par médiatrice (cours 5). Cliquez un point dans le niveau pour le choisir.</small></span>
+        </label>
+        <div class="build-ctl" id="buildCtl" hidden>
+          <div class="btns five">
+            <button class="btn small" id="bFirst" title="Première étape" aria-label="Première étape">|◀</button>
+            <button class="btn small" id="bPrev" title="Étape précédente" aria-label="Étape précédente">◀</button>
+            <button class="btn small primary" id="bPlay">Lecture</button>
+            <button class="btn small" id="bNext" title="Étape suivante" aria-label="Étape suivante">▶</button>
+            <button class="btn small" id="bLast" title="Région finale" aria-label="Région finale">▶|</button>
+          </div>
+          <input type="range" id="bStep" min="0" max="0" value="0" aria-label="Étape de la construction">
+          <p class="build-info" id="buildInfo" aria-live="polite"></p>
+          <label class="check"><input type="checkbox" id="bSkip" checked> Sauter les médiatrices qui ne coupent rien</label>
+        </div>
+      </div>
+
       <div>
         <div class="label"><label for="count">Nuage</label><output id="countOut">30 points</output></div>
         <input type="range" id="count" min="3" max="200" value="30">
@@ -186,6 +205,12 @@
         <kbd>Clic molette</kbd><span>Déplacer la vue</span>
         <kbd>F</kbd><span>Cadrer tous les points</span>
         <kbd>H</kbd><span>Masquer / afficher le panneau</span>
+      </div>
+      <h3>Avec Voronoï</h3>
+      <div class="keys">
+        <kbd>Survol d'un point</kbd><span>Sa région, et ses voisins reliés en pointillés (les arêtes de Delaunay)</span>
+        <kbd>Survol d'un sommet</kbd><span>Son cercle vide, qui passe par les sites à égale distance</span>
+        <kbd>Construction</kbd><span>Onglet Scène : la région d'un point découpée médiatrice par médiatrice</span>
       </div>
       <h3>Partout</h3>
       <div class="keys">

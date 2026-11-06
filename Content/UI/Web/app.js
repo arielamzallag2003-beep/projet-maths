@@ -34,6 +34,7 @@ const state = {
   overlays: { diff: false, reference: false, circles: false, voronoi: false, dual: false },
   layers: { hull: true, edges: true, labels: true, grid: true },
   seeded: false, bench: null,
+  build: { on: false, info: null, timer: 0 },
 };
 
 /* ---------- Appels vers le C++ : jamais d'exception qui casse la page ---------- */
@@ -124,7 +125,7 @@ function showAlgo(id) {
     ? 'Ajouts et suppressions passent par DelaunayKernel_AddPoint / RemovePoint au lieu de tout recalculer.'
     : 'Disponible avec Delaunay uniquement.';
 }
-function selectAlgo(id) { if (state.bench) return; showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
+function selectAlgo(id) { if (state.bench) return; if (id !== 'voronoi' && state.build.on) setBuild(false); showAlgo(id); G('setalgorithm', id); note(`Algorithme : ${CALLS[id]}`); savePrefs(); }
 function showTool(t) { state.tool = t; document.querySelectorAll('.tools .btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t))); }
 function selectTool(t) { showTool(t); G('settool', t); }
 
@@ -346,6 +347,49 @@ function normalize(r) {
   };
 }
 
+/* ---------- Construction pas à pas (Voronoï) ---------- */
+function sendBuild(on, step, site = -1) { G('setconstruction', !!on, site, Math.max(0, step | 0)); }
+function stopPlay() { clearInterval(state.build.timer); state.build.timer = 0; $('bPlay').textContent = 'Lecture'; }
+function nextStep(c, dir) {
+  // Avec « sauter », on passe d'une médiatrice qui coupe à la suivante (et on finit sur la région finale)
+  const last = c.total - 1;
+  if (!$('bSkip').checked) return Math.max(0, Math.min(last, c.step + dir));
+  const cuts = [0, ...(c.cutSteps || []), last].filter((k, i, a) => a.indexOf(k) === i).sort((a, b) => a - b);
+  if (dir > 0) return cuts.find((k) => k > c.step) ?? last;
+  return [...cuts].reverse().find((k) => k < c.step) ?? 0;
+}
+function goStep(dir) { const c = state.build.info; if (c && c.on) sendBuild(true, nextStep(c, dir)); }
+function renderBuild() {
+  const c = state.build.info, on = state.build.on;
+  $('buildOn').checked = on;
+  $('buildCtl').hidden = !on;
+  if (!on) return;
+  const el = $('buildInfo');
+  if (!c || !c.on) { el.textContent = 'Cliquez un point dans le niveau pour construire sa région.'; return; }
+  const last = c.total - 1;
+  $('bStep').max = String(Math.max(0, last)); $('bStep').value = String(c.step);
+  ['bFirst', 'bPrev'].forEach((id) => ($(id).disabled = c.step <= 0));
+  ['bNext', 'bLast'].forEach((id) => ($(id).disabled = c.step >= last));
+  let text;
+  if (c.step === 0) text = `Étape <b>0 / ${last}</b> · on part du cadre, qui contient tous les sites. La région de <b>P${c.site}</b> va être découpée.`;
+  else text = `Étape <b>${c.step} / ${last}</b> · médiatrice de <b>[P${c.site} P${c.neighbor}]</b> : `
+    + (c.cut ? '<span class="cut">elle coupe, la partie du côté de P' + c.neighbor + ' est retirée.</span>' : 'elle ne coupe rien, la région est déjà de ce côté.');
+  if (c.step === last) text += `<br>Région terminée : ${(c.cutSteps || []).length} médiatrice${(c.cutSteps || []).length > 1 ? 's' : ''} utile${(c.cutSteps || []).length > 1 ? 's' : ''}`
+    + (c.skipped ? `, ${c.skipped} site${c.skipped > 1 ? 's' : ''} trop loin, jamais essayé${c.skipped > 1 ? 's' : ''} (arrêt anticipé).` : '.');
+  el.innerHTML = text;
+}
+window.onGeomConstruction = (c) => {
+  state.build.info = c;
+  if (state.build.timer && c && c.step >= c.total - 1) stopPlay();
+  renderBuild();
+};
+function setBuild(on) {
+  state.build.on = on && state.algo === 'voronoi';
+  stopPlay();
+  sendBuild(state.build.on, 0, state.hoverId > 0 ? state.hoverId : -1);
+  renderBuild();
+}
+
 window.onGeomCursor = (x, y) => { $('cursor').textContent = `X ${Math.round(x)} · Y ${Math.round(y)} cm`; };
 window.onGeomHover = (id) => { state.hoverId = id; renderHover(); };
 window.onGeomShortcut = (name) => {
@@ -387,7 +431,8 @@ function caseResult(r, points) {
 }
 function startBench(kind) {
   if (state.bench || !state.geom) return null;
-  state.bench = { kind, stop: false, waiter: null, currentAlgo: state.algo, saved: { algo: state.algo, packed: history.current } };
+  state.bench = { kind, stop: false, waiter: null, currentAlgo: state.algo, saved: { algo: state.algo, packed: history.current, build: state.build.on } };
+  if (state.build.on) { stopPlay(); sendBuild(false, 0); }
   ['runBattery', 'runAll', 'runCurve'].forEach((id) => ($(id).disabled = true));
   $('stopBench').disabled = false;
   document.querySelectorAll('[data-gen], #clear, #importBtn').forEach((b) => (b.disabled = true));
@@ -405,6 +450,7 @@ function endBench(message) {
   history.applying = true;
   G('setalgorithm', b.saved.algo); showAlgo(b.saved.algo);
   G('setpoints', b.saved.packed);
+  if (b.saved.build) { state.build.on = true; sendBuild(true, 0); renderBuild(); }
   syncUndo();
   sentOverlays = {}; // les calques seront renvoyés avec le résultat
   note(message);
@@ -515,6 +561,20 @@ $('hide').onclick = () => G('togglepanel');
 $('runBattery').onclick = () => runBattery([state.algo]);
 $('runAll').onclick = () => runBattery(ALGOS);
 $('runCurve').onclick = runCurve;
+$('buildOn').onchange = (e) => setBuild(e.target.checked);
+$('bFirst').onclick = () => { stopPlay(); sendBuild(true, 0); };
+$('bLast').onclick = () => { stopPlay(); const c = state.build.info; if (c) sendBuild(true, c.total - 1); };
+$('bPrev').onclick = () => { stopPlay(); goStep(-1); };
+$('bNext').onclick = () => { stopPlay(); goStep(1); };
+$('bStep').oninput = (e) => { stopPlay(); sendBuild(true, +e.target.value); };
+$('bPlay').onclick = () => {
+  const c = state.build.info;
+  if (state.build.timer) { stopPlay(); return; }
+  if (!c || !c.on) return;
+  if (c.step >= c.total - 1) sendBuild(true, 0); // relancer depuis le début
+  $('bPlay').textContent = 'Pause';
+  state.build.timer = setInterval(() => goStep(1), 750);
+};
 $('stopBench').onclick = () => { if (state.bench) { state.bench.stop = true; note('Arrêt demandé…'); } };
 
 window.addEventListener('keydown', (e) => {

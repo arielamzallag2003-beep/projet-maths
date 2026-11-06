@@ -177,6 +177,37 @@ const Geo = (() => {
       return { site: pi, poly: poly.map((v) => ({ x: v.x, y: v.y })), nb: poly.map((v) => v.nb) };
     });
   }
+  // Construction pas à pas d'une région, comme UVoronoiDiagram::ComputeVoronoiCellSteps (C++) :
+  // étape 0 = le cadre, puis une étape par médiatrice essayée, du site le plus proche au plus loin,
+  // avec le même arrêt anticipé. -> { steps: [{ nb, poly, removed, cut }], skipped }
+  function voronoiCellSteps(P, i, B) {
+    const scale = Math.max(B.maxX - B.minX, B.maxY - B.minY), eps = 1e-9 * scale, merge = 1e-6 * scale, pi = P[i];
+    const clip = (poly, a, b, label) => {
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy); if (!L) return poly;
+      const nx = dx / L, ny = dy / L, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, f = (v) => nx * (v.x - mx) + ny * (v.y - my), out = [];
+      poly.forEach((p, k) => {
+        const q = poly[(k + 1) % poly.length], fa = f(p), fb = f(q), ina = fa <= eps, inb = fb <= eps;
+        if (ina) out.push(p);
+        if (ina !== inb) { const t = Math.min(1, Math.max(0, fa / (fa - fb))); out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, nb: ina ? label : p.nb }); }
+      });
+      return out;
+    };
+    const area = (poly) => poly.reduce((s, p, k) => { const q = poly[(k + 1) % poly.length]; return s + p.x * q.y - q.x * p.y; }, 0) / 2;
+    let poly = [{ x: B.minX, y: B.minY, nb: -1 }, { x: B.maxX, y: B.minY, nb: -1 }, { x: B.maxX, y: B.maxY, nb: -1 }, { x: B.minX, y: B.maxY, nb: -1 }];
+    const steps = [{ nb: -1, poly: poly.slice(), removed: [], cut: false }];
+    const order = P.map((_, j) => j).filter((j) => j !== i).sort((a, b) => Math.hypot(P[a].x - pi.x, P[a].y - pi.y) - Math.hypot(P[b].x - pi.x, P[b].y - pi.y));
+    for (let o = 0; o < order.length; o++) {
+      const j = order[o], r2 = Math.max(...poly.map((v) => (v.x - pi.x) ** 2 + (v.y - pi.y) ** 2));
+      if (0.25 * ((P[j].x - pi.x) ** 2 + (P[j].y - pi.y) ** 2) > r2 + eps) return { steps, skipped: order.length - o };
+      const removed = clip(poly, P[j], pi, i);
+      poly = clip(poly, pi, P[j], j);
+      for (let k = 0; poly.length > 3 && k < poly.length;) { const q = poly[(k + 1) % poly.length]; if (Math.hypot(poly[k].x - q.x, poly[k].y - q.y) <= merge) poly.splice(k, 1); else k++; }
+      const cut = removed.length >= 3 && Math.abs(area(removed)) > merge * merge;
+      steps.push({ nb: j, poly: poly.slice(), removed: cut ? removed : [], cut });
+    }
+    return { steps, skipped: 0 };
+  }
+
   // Arêtes d'un ensemble de régions : [[a, b, siteA, siteB]], une par paire de sites
   function voronoiEdgesOf(cells) {
     const seen = new Map();
@@ -232,7 +263,7 @@ const Geo = (() => {
   // Positions distinctes (les doublons exacts ne comptent qu'une fois)
   function unique(P) { const seen = new Set(); return P.filter((p) => { const k = pk(p); if (seen.has(k)) return false; seen.add(k); return true; }); }
 
-  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key, voronoiBounds, voronoiCells, voronoiEdgesOf };
+  return { rng, cloud, unique, hullDiff, trisDiff, pk, orient, inCircle, circumcircle, hull, hullWithBoundary, polyArea, triArea, allCollinear, triangulate, delaunay, nonDelaunayEdges, hasCocircular, voronoiSegments, circleSegments, key, voronoiBounds, voronoiCells, voronoiEdgesOf, voronoiCellSteps };
 })();
 
 /* ---------- Vérifications d'un résultat renvoyé par le C++ ---------- */
